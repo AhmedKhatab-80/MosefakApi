@@ -1,0 +1,6 @@
+@MosefakApp.API_HostAddress = http://localhost:5121
+
+GET {{MosefakApp.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
