@@ -1,0 +1,43 @@
+﻿global using Microsoft.AspNetCore.Authorization;
+global using MosefakApi.DependencyInjection;
+global using MosefakApp.API.Extensions;
+global using MosefakApp.API.Filters.Authentication;
+global using System.Text.Json.Serialization;
+global using Microsoft.AspNetCore.Mvc;
+global using MosefakApp.Core.Dtos.User.Requests;
+global using MosefakApp.Core.Dtos.User.Responses;
+global using MosefakApp.Core.IServices.User;
+global using System.Security.Claims;
+global using MosefakApp.API.MiddleWares.Models;
+global using MosefakApp.Core.Dtos.Authentication.Requests;
+global using MosefakApp.Core.Dtos.Authentication.Responses;
+global using MosefakApp.Core.IServices.Authentication;
+global using MosefakApp.API.Filters.Cache;
+global using MosefakApp.Core.Dtos.Role.Request;
+global using MosefakApp.Core.Dtos.Role.Responses;
+global using MosefakApp.Core.IServices.Role;
+global using MosefakApp.Infrastructure.constants;
+global using Microsoft.AspNetCore.Authentication.JwtBearer;
+global using Microsoft.IdentityModel.Tokens;
+global using MosefakApi.Business.Services.Authentication;
+global using System.Text;
+global using Microsoft.AspNetCore.Identity;
+global using MosefakApp.Domains.Entities.Identity;
+global using MosefakApp.Infrastructure.Identity.context;
+global using MosefakApp.Infrastructure.Data.context;
+global using Microsoft.OpenApi.Models;
+global using Swashbuckle.AspNetCore.SwaggerGen;
+global using Microsoft.Extensions.Options;
+global using Microsoft.AspNetCore.Mvc.Filters;
+global using MosefakApp.Core.IServices.Cache;
+global using System.Diagnostics;
+global using MosefakApp.Shared.Exceptions.Base;
+global using System.Net;
+global using System.Text.Json;
+global using MosefakApp.API.MiddleWares;
+global using MosefakApp.Infrastructure.Seed;
+global using MosefakApp.Infrastructure.Identity.Seeding;
+
+
+
+

@@ -8,5 +8,6 @@
         public DateTime CreationTime { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; } = false;
         public bool IsDisabled { get; set; } = false;
+        public List<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     }
 }

@@ -1,0 +1,11 @@
+﻿global using AutoMapper;
+global using System.ComponentModel.DataAnnotations;
+global using MosefakApp.Core.Dtos.Role.Request;
+global using MosefakApp.Core.Dtos.Role.Responses;
+global using MosefakApp.Core.Dtos.User.Requests;
+global using MosefakApp.Core.Dtos.User.Responses;
+global using MosefakApp.Core.Abstractions;
+global using MosefakApp.Domains.Entities.Base;
+global using MosefakApp.Core.Dtos.Authentication.Requests;
+global using MosefakApp.Core.Dtos.Authentication.Responses;
+global using MosefakApp.Core.IRepositories.Generic;

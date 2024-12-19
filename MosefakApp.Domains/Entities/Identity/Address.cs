@@ -7,7 +7,7 @@
         public string City { get; set; } = null!;
         public string Street { get; set; } = null!;
         public int ZipCode { get; set; }
-        public int ApplicationUserId { get; set; }
-        public AppUser ApplicationUser { get; set; } = null!;
+        public int AppUserId { get; set; }
+        public AppUser AppUser { get; set; } = null!;
     }
 }

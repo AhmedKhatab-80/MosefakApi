@@ -1,0 +1,17 @@
+﻿global using Microsoft.EntityFrameworkCore.Metadata.Builders;
+global using Microsoft.EntityFrameworkCore;
+global using MosefakApp.Domains.Entities.Identity;
+global using Microsoft.AspNetCore.Identity;
+global using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+global using MosefakApp.Infrastructure.Identity.IdentityEntitiesConfig;
+global using Microsoft.Extensions.DependencyInjection;
+global using MosefakApp.Infrastructure.constants;
+global using MosefakApp.Infrastructure.Identity.context;
+global using MosefakApp.Core.IRepositories.Generic;
+global using MosefakApp.Core.IUnit;
+global using MosefakApp.Domains.Entities.Base;
+global using MosefakApp.Infrastructure.Data.context;
+global using MosefakApp.Infrastructure.Repositories.Generic;
+global using Microsoft.AspNetCore.Http;
+global using MosefakApp.Shared.Interfaces;
+global using System.Security.Claims;
