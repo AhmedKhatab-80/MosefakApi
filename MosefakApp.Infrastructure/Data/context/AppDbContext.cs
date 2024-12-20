@@ -1,4 +1,6 @@
-﻿namespace MosefakApp.Infrastructure.Data.context
+﻿using Microsoft.EntityFrameworkCore.Design;
+
+namespace MosefakApp.Infrastructure.Data.context
 {
     public class AppDbContext : DbContext
     {
@@ -8,6 +10,11 @@
         public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor httpContextAccessor) : base(options)
         {
             _httpContextAccessor = httpContextAccessor;
+        }
+
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        {
+            
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -66,6 +73,19 @@
             }
 
             return base.SaveChangesAsync(cancellationToken);
+        }
+    }
+    public class BloggingContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+    {
+        public AppDbContext CreateDbContext(string[] args)
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+            
+
+            optionsBuilder.UseSqlServer("DefaultConnectionString");
+
+
+            return new AppDbContext(optionsBuilder.Options);
         }
     }
 }

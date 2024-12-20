@@ -1,4 +1,6 @@
-﻿namespace MosefakApp.Infrastructure.Identity.context
+﻿using Microsoft.EntityFrameworkCore.Design;
+
+namespace MosefakApp.Infrastructure.Identity.context
 {
     public class AppIdentityDbContext : IdentityDbContext<AppUser, AppRole, int>
     {
@@ -22,5 +24,20 @@
             builder.Entity<IdentityRoleClaim<int>>().ToTable(name: "RoleClaims", schema: "Security");
             builder.Entity<IdentityUserRole<int>>().ToTable(name: "UserRoles", schema: "Security");
         }
+    }
+    public class BloggingContextFactory : IDesignTimeDbContextFactory<AppIdentityDbContext>
+    {
+        public AppIdentityDbContext CreateDbContext(string[] args)
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<AppIdentityDbContext>();
+
+
+            optionsBuilder.UseSqlServer("IdentityConnectionString");
+
+
+            return new AppIdentityDbContext(optionsBuilder.Options);
+        }
+
+        
     }
 }
