@@ -1,11 +1,13 @@
-﻿namespace MosefakApp.Core.IUnit
+﻿using MosefakApp.Core.IRepositories.Non_Generic;
+
+namespace MosefakApp.Core.IUnit
 {
-    public interface IUnitOfWork<T> : IAsyncDisposable where T : BaseEntity
+    public interface IUnitOfWork<T> : IAsyncDisposable where T : class
     {
         IGenericRepositoryAsync<T> RepositoryAsync { get; }
-        Task<int> SaveAsync();
-        Task CommitAsync();
-        Task RollBackAsync();
-
+        IDoctorRepositoryAsync DoctorRepositoryAsync { get; }
+        IPatientRepositoryAsync PatientRepositoryAsync { get; }
+        IAppointmentRepositoryAsync AppointmentRepositoryAsync { get; }
+        Task<int> CommitAsync();
     }
 }

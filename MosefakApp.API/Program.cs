@@ -1,6 +1,5 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 
 // Add services to the container.
 
@@ -17,7 +16,6 @@ builder.Services.RegisterConfiguration(builder.Configuration);
 builder.Services.RegisterIdentityConfig();
 builder.Services.AddHttpContextAccessor();
 
-
 // for permission based authorization
 
 builder.Services.AddTransient(typeof(IAuthorizationHandler), typeof(PermissionAuthorizationHandler));
@@ -29,7 +27,7 @@ builder.Services.AddSwaggerServices();
 
 // Call Seed Data
 
-await builder.Services.Seeding();
+//await builder.Services.Seeding();
 
 
 builder.Services.AddAuthentication(builder.Configuration);

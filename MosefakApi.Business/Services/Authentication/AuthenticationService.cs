@@ -10,7 +10,6 @@
         private readonly IJwtProvider _jwtProvider;
         private readonly IHttpContextAccessor _HttpContextAccessor;
         private readonly ILogger<AuthenticationService> _logger;
-        private readonly int _refreshTokenExipreDays = 14;
 
         public AuthenticationService(UserManager<AppUser> userManger, SignInManager<AppUser> signInManager, IJwtProvider jwtProvider, RoleManager<AppRole> roleManger, IEmailSender emailSender, IEmailBodyBuilder emailBuilder, IHttpContextAccessor httpContextAccessor, ILogger<AuthenticationService> logger)
         {
@@ -50,18 +49,9 @@
 
             var jwtProviderResponse = _jwtProvider.GenerateToken(user, roles, permissions);
 
-            var refreshToken = GenerateRefreshToken();
-            var RefreshTokenExipreDate = DateTime.UtcNow.AddDays(_refreshTokenExipreDays);
-
-            user.RefreshTokens.Add(new RefreshToken
-            {
-                RefreshTokenValue = refreshToken,
-                ExpiresOn = RefreshTokenExipreDate,
-            });
-
             await _userManager.UpdateAsync(user);
 
-            var response = GetLoginResponse(user, jwtProviderResponse, refreshToken, RefreshTokenExipreDate);
+            var response = GetLoginResponse(user, jwtProviderResponse);
 
             return response is null ? throw new BadRequest("Invalid UserName or Password") : response;
         }
@@ -93,7 +83,7 @@
                 var code = await _userManager.GenerateEmailConfirmationTokenAsync(appUser);
                 code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
-                _logger.LogInformation(code);
+                _logger.LogInformation(code); // will remove it before production
 
                 await SendConfirmationEmail(appUser, code);
             }
@@ -138,7 +128,6 @@
             // Assign Registered Users to Default Role
 
             await _userManager.AddToRoleAsync(user, DefaultRole.Member);
-
         }
 
         public async Task ResendConfirmationEmail(ResendConfirmationEmailRequest request)
@@ -156,10 +145,8 @@
 
             _logger.LogInformation(code);
 
-            // ToDo: send it to email!!
             await SendConfirmationEmail(user, code);
         }
-
 
 
         public async Task<bool> ValidateEmailExist(string email)
@@ -215,72 +202,6 @@
             }
         }
 
-        public async Task<LoginResponse?> GetRefreshToken(string accessToken, string refreshToken)
-        {
-            // verify from access token and get userId from it by validateToken that exists in jwtProvider..
-
-            var userId = _jwtProvider.ValidateToken(accessToken);
-
-            if (userId is null)
-                throw new BadRequest("Invalid Access Token or refresh Token");
-
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user is null)
-                throw new BadRequest("Invalid Access Token or refresh Token");
-
-            var UserRefreshToken = user.RefreshTokens.SingleOrDefault(x => x.RefreshTokenValue == refreshToken && x.IsActive);
-
-            if (UserRefreshToken is null)
-                throw new BadRequest("Invalid Access Token or refresh Token");
-
-            UserRefreshToken.RevokedOn = DateTime.UtcNow;
-
-            // Generate NewAccessToken and NewRefreshToken
-
-            var (roles, permissions) = await GetRolesAndPermissions(user);
-
-            var jwtProviderResponse = _jwtProvider.GenerateToken(user, roles, permissions);
-            var newRefreshToken = GenerateRefreshToken();
-            var newRefreshTokenExpirationDate = DateTime.UtcNow.AddDays(_refreshTokenExipreDays);
-
-            user.RefreshTokens.Add(new RefreshToken
-            {
-                RefreshTokenValue = newRefreshToken,
-                ExpiresOn = newRefreshTokenExpirationDate,
-            });
-
-            await _userManager.UpdateAsync(user);
-
-            return GetLoginResponse(user, jwtProviderResponse, newRefreshToken, newRefreshTokenExpirationDate);
-        }
-
-        public async Task<bool> RevokeRefreshToken(string accessToken, string refreshToken)
-        {
-            // verify from access token and get userId from it by validateToken that exists in jwtProvider..
-
-            var userId = _jwtProvider.ValidateToken(accessToken);
-
-            if (userId is null)
-                return false;
-
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user is null)
-                return false;
-
-            var UserRefreshToken = user.RefreshTokens.SingleOrDefault(x => x.RefreshTokenValue == refreshToken && x.IsActive);
-
-            if (UserRefreshToken is null)
-                return false;
-
-            UserRefreshToken.RevokedOn = DateTime.UtcNow;
-
-            await _userManager.UpdateAsync(user);
-
-            return true;
-        }
-
         private async Task SendConfirmationEmail(AppUser appUser, string code)
         {
             var origin = _HttpContextAccessor?.HttpContext?.Request.Headers.Origin;
@@ -294,7 +215,7 @@
                 link: $"{origin}/api/Authentication/confirm-email?userId={appUser.Id}&Code={code}", // will be Url that belong component(confirm-email component) that when open (OnInit) will send this Url and go to url that belong it..
                 linkTitle: "Activate Account");
 
-            await _emailSender.SendEmailAsync(appUser.Email!, "✅ Talabat: Confirmation Email", body);
+            await _emailSender.SendEmailAsync(appUser.Email!, "✅ Mosefak: Confirmation Email", body);
 
         }
 
@@ -314,9 +235,9 @@
                 linkTitle: "Reset"
                 );
 
-            await _emailSender.SendEmailAsync(user.Email!, "✅ Talabat: Reset Your Password", body);
+            await _emailSender.SendEmailAsync(user.Email!, "✅ Mosefak: Reset Your Password", body);
         }
-        private LoginResponse GetLoginResponse(AppUser user, JwtProviderResponse response, string RefreshToken, DateTime RefreshTokenExipreDate)
+        private LoginResponse GetLoginResponse(AppUser user, JwtProviderResponse response)
         {
 
             return new LoginResponse()
@@ -326,18 +247,9 @@
                 LastName = user.LastName,
                 Token = response.Token,
                 ExpireIn = response.ExpireIn * 60,
-                RefreshToken = RefreshToken,
-                RefreshTokenExpiration = RefreshTokenExipreDate
             };
         }
 
-        private static string GenerateRefreshToken()
-        {
-            var randomNumber = new byte[64];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
-        }
 
         private async Task<(IEnumerable<string> roles, IEnumerable<string> permissions)> GetRolesAndPermissions(AppUser user)
         {

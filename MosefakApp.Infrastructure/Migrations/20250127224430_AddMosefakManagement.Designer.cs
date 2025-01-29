@@ -9,11 +9,11 @@ using MosefakApp.Infrastructure.Identity.context;
 
 #nullable disable
 
-namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
+namespace MosefakApp.Infrastructure.Migrations
 {
     [DbContext(typeof(AppIdentityDbContext))]
-    [Migration("20241220221705_Init")]
-    partial class Init
+    [Migration("20250127224430_AddMosefakManagement")]
+    partial class AddMosefakManagement
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -182,6 +182,9 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -193,6 +196,12 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Gender")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ImagePath")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -337,45 +346,8 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
                             b1.Navigation("AppUser");
                         });
 
-                    b.OwnsMany("MosefakApp.Domains.Entities.Identity.RefreshToken", "RefreshTokens", b1 =>
-                        {
-                            b1.Property<int>("AppUserId")
-                                .HasColumnType("int")
-                                .HasColumnName("UserId");
-
-                            b1.Property<int>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("int");
-
-                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
-
-                            b1.Property<DateTime>("CreatedOn")
-                                .HasColumnType("datetime2");
-
-                            b1.Property<DateTime>("ExpiresOn")
-                                .HasColumnType("datetime2");
-
-                            b1.Property<string>("RefreshTokenValue")
-                                .IsRequired()
-                                .HasColumnType("nvarchar(max)");
-
-                            b1.Property<DateTime?>("RevokedOn")
-                                .HasColumnType("datetime2");
-
-                            b1.HasKey("AppUserId", "Id");
-
-                            b1.ToTable("RefreshTokens", "Security");
-
-                            b1.WithOwner("AppUser")
-                                .HasForeignKey("AppUserId");
-
-                            b1.Navigation("AppUser");
-                        });
-
                     b.Navigation("Address")
                         .IsRequired();
-
-                    b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
         }

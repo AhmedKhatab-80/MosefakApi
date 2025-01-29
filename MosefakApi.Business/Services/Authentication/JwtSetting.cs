@@ -11,7 +11,7 @@
         [Required, Range(1, int.MaxValue)]
         public int lifeTime { get; set; }
 
-        [Required]
+        //[Required]
         public string Key { get; set; } = null!;
     }
 

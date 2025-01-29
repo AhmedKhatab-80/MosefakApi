@@ -11,30 +11,3 @@
         }
     }
 }
-
-/*
- 
-  -- Bad Practice
-
-                    if(Products is not null)
-                    {
-                        foreach (var prod in Products)
-                        {
-                            await dbContext.Products.AddAsync(prod);
-                            await dbContext.SaveChangesAsync();
-                        }
-
-                    }
- 
-  -- Good Practice as Performace
-
-                    if(Products is not null)
-                    {
-                        foreach (var prod in Products)
-                        {
-                            await dbContext.Products.AddAsync(prod);
-                        }
-                            await dbContext.SaveChangesAsync();
-                    }
-
- */

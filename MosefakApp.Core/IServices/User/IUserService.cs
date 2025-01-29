@@ -2,6 +2,7 @@
 {
     public interface IUserService
     {
+
         // For admin
         Task<IList<UserResponse>> GetUsersAsync(bool IncludeDeleted = false);
         Task<UserResponse> GetUserByIdAsync(int id);

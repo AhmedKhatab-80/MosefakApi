@@ -15,3 +15,15 @@ global using MosefakApp.Infrastructure.Repositories.Generic;
 global using Microsoft.AspNetCore.Http;
 global using MosefakApp.Shared.Interfaces;
 global using System.Security.Claims;
+global using Microsoft.EntityFrameworkCore.Design;
+global using MosefakApp.Domains.Entities;
+global using DayOfWeek = MosefakApp.Domains.Enums.DayOfWeek;
+global using MosefakApp.Domains.Enums;
+global using MosefakApp.Core.IRepositories.Non_Generic;
+global using MosefakApp.Infrastructure.Repositories.Non_Generic;
+global using System.Linq.Expressions;
+global using MosefakApp.Core.Dtos.Doctor.Responses;
+global using MosefakApp.Core.Dtos.Review.Responses;
+global using MosefakApp.Core.Dtos.Specialization.Responses;
+
+

@@ -56,8 +56,7 @@
                                select new UserResponse
                                {
                                    Id = u.Id,
-                                   FirstName = u.FirstName,
-                                   LastName = u.LastName,
+                                   FullName = u.FirstName +' '+ u.LastName,
                                    Email = u.Email!,
                                    IsDisabled = u.IsDisabled,
                                    Roles = (from ur in _context.UserRoles
@@ -95,8 +94,7 @@
                 list.Add(new UserResponse
                 {
                     Id = user.Id,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
+                    FullName = user.FirstName +" "+ user.LastName,
                     Email = user.Email!,
                     IsDisabled = user.IsDisabled,
                     Roles = roles
@@ -142,8 +140,7 @@
             return new UserResponse
             {
                 Id = user.Id,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
+                FullName = user.FirstName+" "+ user.LastName,
                 Email = user.Email!,
                 IsDisabled = user.IsDisabled,
                 Roles = roles
@@ -159,8 +156,7 @@
                               select new UserResponse
                               {
                                   Id = u.Id,
-                                  FirstName = u.FirstName,
-                                  LastName = u.LastName,
+                                  FullName = u.FirstName + " " + u.LastName,
                                   Email = u.Email!,
                                   IsDisabled = u.IsDisabled,
                                   Roles = (from ur in _context.UserRoles
@@ -353,9 +349,9 @@
             // Probability to failed is very small..
         }
 
-        public async Task ChangeEmail(ChangeEmailRequest changeEmailRequest)
+        public Task ChangeEmail(ChangeEmailRequest changeEmailRequest)
         {
-            throw new Exception();
+            throw new NotImplementedException();
         }
 
         public async Task ChangePasswordAsync(string userId, ChangePasswordRequest changePasswordRequest)
@@ -373,5 +369,7 @@
 
             await _signInManager.RefreshSignInAsync(user!);
         }
+
+       
     }
 }

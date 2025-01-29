@@ -57,17 +57,6 @@
             return Ok();
         }
 
-        [HttpPost("refresh-token")]
-        public async Task<LoginResponse?> RefreshTokenAsync(RefreshTokenRequest request)
-        {
-            return await _authenticationService.GetRefreshToken(request.AccessToken, request.RefreshToken);
-        }
-
-
-        [HttpPost("revoke-token")]
-        public async Task<bool> RevokeRefreshToken(RefreshTokenRequest request)
-        {
-            return await _authenticationService.RevokeRefreshToken(request.AccessToken, request.RefreshToken);
-        }
+        
     }
 }

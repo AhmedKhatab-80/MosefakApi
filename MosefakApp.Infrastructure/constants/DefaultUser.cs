@@ -1,12 +1,12 @@
 ﻿namespace MosefakApp.Infrastructure.constants
 {
-    public static class DefaultUser
+    public static class DefaultUser // will remove these data before production
     {
         public const int AdminId = 1;
         public const string FirstNameAdmin = "Admin";
         public const string LastNameAdmin = "Admin";
-        public const string AdminEmail = "Admin48@gmail.com";
-        public const string AdminPassword = "Password1984521a#";
+        public const string AdminEmail = "Admin48@gmail.com"; 
+        public const string AdminPassword = "Password1984521a#"; 
         public const string City = "Cairo";
         public const string State = "Egy";
         public const string Street = "122 moez";

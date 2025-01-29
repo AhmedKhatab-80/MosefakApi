@@ -9,3 +9,24 @@ global using MosefakApp.Domains.Entities.Base;
 global using MosefakApp.Core.Dtos.Authentication.Requests;
 global using MosefakApp.Core.Dtos.Authentication.Responses;
 global using MosefakApp.Core.IRepositories.Generic;
+global using System.Linq.Expressions;
+global using MosefakApp.Domains.Entities;
+global using MosefakApp.Core.Dtos.Review.Responses;
+global using MosefakApp.Core.Dtos.Schedule.Responses;
+global using MosefakApp.Core.Dtos.Specialization.Responses;
+global using MosefakApp.Core.Dtos.Doctor.Responses;
+global using MosefakApp.Core.Dtos.Doctor.Requests;
+global using MosefakApp.Domains.Enums;
+global using MosefakApp.Core.Dtos.ClinicAddress.Responses;
+global using DayOfWeek = MosefakApp.Domains.Enums.DayOfWeek;
+global using MosefakApp.Core.Dtos.ClinicAddress.Requests;
+global using MosefakApp.Core.Dtos.Schedule.Requests;
+global using MosefakApp.Core.Dtos.Specialization.Requests;
+global using MosefakApp.Domains.Entities.Identity;
+
+
+
+
+
+
+

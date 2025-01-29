@@ -7,7 +7,5 @@
         public string? Email { get; set; }
         public string Token { get; set; } = null!;
         public int ExpireIn { get; set; }
-        public string RefreshToken { get; set; } = null!;
-        public DateTime RefreshTokenExpiration { get; set; }
     }
 }

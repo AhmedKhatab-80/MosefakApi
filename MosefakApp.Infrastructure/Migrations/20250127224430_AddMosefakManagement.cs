@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
+namespace MosefakApp.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class Init : Migration
+    public partial class AddMosefakManagement : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -41,11 +41,14 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
                         .Annotation("SqlServer:Identity", "1, 1"),
                     FirstName = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false),
+                    Gender = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Address_Id = table.Column<int>(type: "int", nullable: false),
                     Address_State = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Address_City = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Address_Street = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Address_ZipCode = table.Column<int>(type: "int", nullable: false),
+                    DateOfBirth = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ImagePath = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreationTime = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     IsDisabled = table.Column<bool>(type: "bit", nullable: false),
@@ -157,31 +160,6 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "RefreshTokens",
-                schema: "Security",
-                columns: table => new
-                {
-                    UserId = table.Column<int>(type: "int", nullable: false),
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    RefreshTokenValue = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ExpiresOn = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    RevokedOn = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RefreshTokens", x => new { x.UserId, x.Id });
-                    table.ForeignKey(
-                        name: "FK_RefreshTokens_Users_UserId",
-                        column: x => x.UserId,
-                        principalSchema: "Security",
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "UserRoles",
                 schema: "Security",
                 columns: table => new
@@ -264,10 +242,6 @@ namespace MosefakApp.Infrastructure.Migrations.AppIdentityDb
 
             migrationBuilder.DropTable(
                 name: "AspNetUserTokens");
-
-            migrationBuilder.DropTable(
-                name: "RefreshTokens",
-                schema: "Security");
 
             migrationBuilder.DropTable(
                 name: "RoleClaims",

@@ -1,9 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore.Design;
-
-namespace MosefakApp.Infrastructure.Data.context
+﻿namespace MosefakApp.Infrastructure.Data.context
 {
     public class AppDbContext : DbContext
     {
+        public DbSet<Doctor> Doctors { get; set; }
+        public DbSet<WorkingTime> WorkingTimes { get; set; }
+        public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Review> Reviews { get; set; }
+        public DbSet<ClinicAddress> ClinicAddresses { get; set; }
+        public DbSet<Specialization> Specializations { get; set; }
+        public DbSet<Payment> Payments { get; set; }
 
         private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -12,14 +17,11 @@ namespace MosefakApp.Infrastructure.Data.context
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-        {
-            
-        }
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Ignore<BaseEntity>();
 
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
@@ -66,7 +68,7 @@ namespace MosefakApp.Infrastructure.Data.context
                         entryEntity.State = EntityState.Modified;
 
                         entryEntity.Property(x => x.DeletedTime).CurrentValue = DateTime.Now;
-                        entryEntity.Property(x => x.IsSoftDeleted).CurrentValue = true;
+                        entryEntity.Property(x => x.IsDeleted).CurrentValue = true;
                         entryEntity.Property(x => x.DeletedByUserId).CurrentValue = CurrentUserId.Value;
                     }
                 }
@@ -75,17 +77,17 @@ namespace MosefakApp.Infrastructure.Data.context
             return base.SaveChangesAsync(cancellationToken);
         }
     }
-    public class BloggingContextFactory : IDesignTimeDbContextFactory<AppDbContext>
-    {
-        public AppDbContext CreateDbContext(string[] args)
-        {
-            var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-            
-
-            optionsBuilder.UseSqlServer("DefaultConnectionString");
+    //public class BloggingContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+    //{
+    //    public AppDbContext CreateDbContext(string[] args)
+    //    {
+    //        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
 
-            return new AppDbContext(optionsBuilder.Options);
-        }
-    }
+    //        optionsBuilder.UseSqlServer("server=.; database=MosefakApp; Integrated Security=SSPI; trustServerCertificate=true;");
+
+
+    //        return new AppDbContext(optionsBuilder.Options);
+    //    }
+    //}
 }

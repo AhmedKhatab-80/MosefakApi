@@ -1,6 +1,6 @@
 ﻿namespace MosefakApp.API.Extensions
 {
-    public static class valdationErrorExtension
+    public static class ValdationErrorExtension
     {
         public static IServiceCollection Configure(this IServiceCollection services)
         {
@@ -9,8 +9,8 @@
 
                 options.InvalidModelStateResponseFactory = (context) =>
                 {
-                    var Errors = context.ModelState.Where(x => x.Value.Errors.Count > 0)
-                                       .SelectMany(P => P.Value.Errors)
+                    var Errors = context.ModelState.Where(x => x.Value!.Errors.Count > 0)
+                                       .SelectMany(P => P.Value!.Errors)
                                        .Select(P => P.ErrorMessage)
                                        .ToList();
 

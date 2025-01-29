@@ -82,28 +82,8 @@
                 },
                 new AppRole
                 {
-                    Name = DefaultRole.HR,
-                    ConcurrencyStamp = DefaultRole.HRConcurrencyStamp,
-                },
-                new AppRole
-                {
-                    Name = DefaultRole.Manager,
-                    ConcurrencyStamp = DefaultRole.ManagerConcurrencyStamp,
-                },
-                new AppRole
-                {
                     Name = DefaultRole.Member,
                     ConcurrencyStamp = DefaultRole.MemberConcurrencyStamp,
-                },
-                 new AppRole
-                {
-                    Name = DefaultRole.Senior,
-                    ConcurrencyStamp = DefaultRole.SeniorConcurrencyStamp,
-                },
-                  new AppRole
-                {
-                    Name = DefaultRole.TeamLead,
-                    ConcurrencyStamp = DefaultRole.TeamLeadConcurrencyStamp,
                 }
             };
         }

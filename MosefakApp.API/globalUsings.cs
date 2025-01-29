@@ -37,6 +37,9 @@ global using System.Text.Json;
 global using MosefakApp.API.MiddleWares;
 global using MosefakApp.Infrastructure.Seed;
 global using MosefakApp.Infrastructure.Identity.Seeding;
+global using MosefakApp.Core.Dtos.Doctor.Requests;
+global using MosefakApp.Core.Dtos.Doctor.Responses;
+global using MosefakApp.Core.IServices;
 
 
 

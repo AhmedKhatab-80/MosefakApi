@@ -21,6 +21,7 @@
             // Register IUnit Of work 
 
             services.AddScoped(typeof(IUnitOfWork<>), typeof(UnitOfWork<>));
+            services.AddScoped(typeof(IUserRepository), typeof(UserRepository));
 
 
             //Register Services
@@ -44,7 +45,12 @@
         {
 
             var connection = configuration["ConnectionStrings:DefaultConnectionString"];
-            services.AddDbContext<AppDbContext>(x => x.UseSqlServer(connection));
+            services.AddDbContext<AppDbContext>(x => x.UseSqlServer(connection,options=>
+            {
+                options.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null);
+                options.CommandTimeout(60);
+
+            }));
             services.AddScoped<AppDbContext, AppDbContext>();
             return services;
         }
@@ -66,7 +72,11 @@
         {
 
             var connection = configuration["ConnectionStrings:IdentityConnectionString"];
-            services.AddDbContext<AppIdentityDbContext>(x => x.UseSqlServer(connection));
+            services.AddDbContext<AppIdentityDbContext>(x => x.UseSqlServer(connection, options =>
+            {
+                options.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null);
+                options.CommandTimeout(60);
+            }));
             services.AddScoped<AppIdentityDbContext, AppIdentityDbContext>();
 
             return services;
@@ -80,6 +90,7 @@
             services.AddScoped(typeof(IUserService), typeof(UserService));
             services.AddScoped(typeof(IEmailSender), typeof(EmailSender));
             services.AddScoped(typeof(IEmailBodyBuilder), typeof(EmailBodyBuilder));
+            services.AddScoped(typeof(IDoctorService), typeof(DoctorService));
 
 
             return services;

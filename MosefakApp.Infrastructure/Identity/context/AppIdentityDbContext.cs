@@ -1,12 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore.Design;
-
-namespace MosefakApp.Infrastructure.Identity.context
+﻿namespace MosefakApp.Infrastructure.Identity.context
 {
     public class AppIdentityDbContext : IdentityDbContext<AppUser, AppRole, int>
     {
-        public AppIdentityDbContext()
-        {
-        }
 
         public AppIdentityDbContext(DbContextOptions<AppIdentityDbContext> options) : base(options)
         {
@@ -16,7 +11,7 @@ namespace MosefakApp.Infrastructure.Identity.context
         {
             base.OnModelCreating(builder);
 
-            builder.ApplyConfiguration(new ApplicationUserConfig());
+            builder.ApplyConfiguration(new AppUserConfig());
 
             builder.Entity<AppUser>().ToTable(name: "Users", schema: "Security");
             builder.Entity<IdentityUserRole<int>>().ToTable(name: "UserRoles", schema: "Security");
@@ -25,19 +20,19 @@ namespace MosefakApp.Infrastructure.Identity.context
             builder.Entity<IdentityUserRole<int>>().ToTable(name: "UserRoles", schema: "Security");
         }
     }
-    public class BloggingContextFactory : IDesignTimeDbContextFactory<AppIdentityDbContext>
-    {
-        public AppIdentityDbContext CreateDbContext(string[] args)
-        {
-            var optionsBuilder = new DbContextOptionsBuilder<AppIdentityDbContext>();
+    //public class BloggingContextFactory : IDesignTimeDbContextFactory<AppIdentityDbContext>
+    //{
+    //    public AppIdentityDbContext CreateDbContext(string[] args)
+    //    {
+    //        var optionsBuilder = new DbContextOptionsBuilder<AppIdentityDbContext>();
 
 
-            optionsBuilder.UseSqlServer("IdentityConnectionString");
+    //        optionsBuilder.UseSqlServer("server=.; database=MosefakManagement; Integrated Security=SSPI; trustServerCertificate=true;");
 
 
-            return new AppIdentityDbContext(optionsBuilder.Options);
-        }
+    //        return new AppIdentityDbContext(optionsBuilder.Options);
+    //    }
 
         
-    }
+    //}
 }
