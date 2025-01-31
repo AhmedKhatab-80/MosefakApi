@@ -91,6 +91,8 @@
             services.AddScoped(typeof(IEmailSender), typeof(EmailSender));
             services.AddScoped(typeof(IEmailBodyBuilder), typeof(EmailBodyBuilder));
             services.AddScoped(typeof(IDoctorService), typeof(DoctorService));
+            services.AddScoped(typeof(IPatientService), typeof(PatientService));
+            services.AddScoped(typeof(IAppointmentService), typeof(AppointmentService));
 
 
             return services;

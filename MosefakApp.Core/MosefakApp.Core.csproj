@@ -14,4 +14,9 @@
     <ProjectReference Include="..\MosefakApp.Domains\MosefakApp.Domains.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Dtos\Appointment\Responses\" />
+    <Folder Include="Dtos\Appointment\Requests\" />
+  </ItemGroup>
+
 </Project>

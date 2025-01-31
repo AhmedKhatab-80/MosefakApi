@@ -319,10 +319,22 @@
         {
             var user = await _context.Users.Where(x => x.Id.ToString() == userId).Select(u => new UserProfileResponse
             {
+                Id = u.Id,
                 FirstName = u.FirstName,
                 LastName = u.LastName,
                 Email = u.Email!,
-                PhoneNumber = u.PhoneNumber!
+                PhoneNumber = u.PhoneNumber!,
+                Gender = u.Gender,
+                DateOfBirth = u.DateOfBirth,
+                ImagePath = u.ImagePath,
+                Address = new AddressUserResponse
+                {
+                    Id = u.Address.Id,
+                    City = u.Address.City,
+                    State = u.Address.State,
+                    Street = u.Address.Street,
+                    ZipCode = u.Address.ZipCode
+                }
             })
                 .FirstOrDefaultAsync();
 
@@ -332,21 +344,39 @@
         }
 
 
-        public async Task UpdateUserProfile(string userId, UpdateUserProfile updateUserProfile)
+        public async Task<UserProfileResponse> UpdateUserProfile(int userId, UpdatePatientProfileRequest updateUserProfile)
         {
 
             // I did't add validation to check exist user, because I am make sure that will handle this method that already authorized..
 
 
-            await _userManager.Users.Where(x => x.Id.ToString() == userId)
+            await _userManager.Users.Where(x => x.Id == userId)
                 .ExecuteUpdateAsync(setters =>
                 setters
                 .SetProperty(p => p.FirstName, updateUserProfile.FirstName)
                 .SetProperty(p => p.LastName, updateUserProfile.LastName)
                 .SetProperty(p => p.PhoneNumber, updateUserProfile.PhoneNumber)
+                .SetProperty(p => p.DateOfBirth, updateUserProfile.DateOfBirth)
+                .SetProperty(p => p.ImagePath, updateUserProfile.ImagePath)
+                .SetProperty(p => p.Address.State, updateUserProfile.Address.State)
+                .SetProperty(p => p.Address.State, updateUserProfile.Address.State)
+                .SetProperty(p => p.Address.State, updateUserProfile.Address.State)
+                .SetProperty(p => p.ImagePath, updateUserProfile.ImagePath)
                 );
 
             // Probability to failed is very small..
+
+            return new UserProfileResponse
+            {
+                Id = userId,
+                FirstName = updateUserProfile.FirstName,
+                LastName = updateUserProfile.LastName,
+                PhoneNumber = updateUserProfile.PhoneNumber,
+                Address = updateUserProfile.Address,
+                DateOfBirth = updateUserProfile.DateOfBirth,
+                Gender = updateUserProfile.Gender,
+                ImagePath = updateUserProfile.ImagePath,
+            };
         }
 
         public Task ChangeEmail(ChangeEmailRequest changeEmailRequest)

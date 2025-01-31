@@ -1,12 +1,8 @@
 ﻿namespace MosefakApp.Core.Dtos.Doctor.Responses
 {
-    public class DoctorProfileResponse
+    public class DoctorProfileResponse : UserProfileResponse
     {
-        // Shared fields (Users table)
-        public string FullName { get; set; } = null!;
-        public string? ImagePath { get; set; }
-        public string Email { get; set; } = null!;
-        public string PhoneNumber { get; set; } = null!;
+        // Shared fields (Users table), I Inherited them from UserProfileResponse to avoid duplication
 
         // Doctor-specific fields (Doctors table)
         public List<SpecializationResponse> Specialty { get; set; } = new List<SpecializationResponse>();
