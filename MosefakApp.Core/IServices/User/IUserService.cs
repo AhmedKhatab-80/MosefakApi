@@ -12,8 +12,6 @@
         Task UnLock(int id);
 
         // for user
-        Task<UserProfileResponse> GetUserProfileAsync(string userId);
-        Task<UserProfileResponse> UpdateUserProfile(int userId, UpdatePatientProfileRequest updateUserProfile);
         Task ChangeEmail(ChangeEmailRequest changeEmailRequest);
         Task ChangePasswordAsync(string userId, ChangePasswordRequest changePasswordRequest);
     }

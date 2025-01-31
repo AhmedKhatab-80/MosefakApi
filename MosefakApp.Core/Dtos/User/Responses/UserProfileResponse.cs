@@ -9,7 +9,7 @@
         public string Email { get; set; } = null!;
         public string? PhoneNumber { get; set; } 
         public Gender? Gender { get; set; }
-        public AddressUserResponse Address { get; set; } = null!;
+        public AddressUserResponse? Address { get; set; } 
         public DateTime? DateOfBirth { get; set; }
         public int Age { get; set; }
     }

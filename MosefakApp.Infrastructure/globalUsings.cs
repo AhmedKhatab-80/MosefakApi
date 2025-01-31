@@ -25,5 +25,7 @@ global using System.Linq.Expressions;
 global using MosefakApp.Core.Dtos.Doctor.Responses;
 global using MosefakApp.Core.Dtos.Review.Responses;
 global using MosefakApp.Core.Dtos.Specialization.Responses;
+global using MosefakApp.Core.Dtos.Appointment.Responses;
+
 
 

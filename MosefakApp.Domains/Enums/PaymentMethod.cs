@@ -20,5 +20,4 @@
         [EnumMember(Value = "Cash")]
         Cash
     }
-
 }

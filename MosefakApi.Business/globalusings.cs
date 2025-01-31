@@ -45,3 +45,7 @@ global using MosefakApp.Core.IServices;
 global using MosefakApp.Core.IUnit;
 global using MosefakApp.Domains.Entities;
 global using MosefakApp.Core.IRepositories.Non_Generic;
+global using MosefakApp.Core.Dtos.Appointment.Responses;
+global using MosefakApp.Domains.Enums;
+
+

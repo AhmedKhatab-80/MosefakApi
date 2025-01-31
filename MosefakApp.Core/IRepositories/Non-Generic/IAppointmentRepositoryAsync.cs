@@ -2,5 +2,6 @@
 {
     public interface IAppointmentRepositoryAsync : IGenericRepositoryAsync<Appointment>
     {
+        Task<IEnumerable<AppointmentResponse>> GetAppointments(Expression<Func<Appointment,bool>> expression); // I had to add it for better performance
     }
 }

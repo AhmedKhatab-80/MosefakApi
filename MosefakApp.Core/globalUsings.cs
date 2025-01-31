@@ -23,6 +23,8 @@ global using MosefakApp.Core.Dtos.ClinicAddress.Requests;
 global using MosefakApp.Core.Dtos.Schedule.Requests;
 global using MosefakApp.Core.Dtos.Specialization.Requests;
 global using MosefakApp.Domains.Entities.Identity;
+global using MosefakApp.Core.Dtos.Appointment.Responses;
+
 
 
 

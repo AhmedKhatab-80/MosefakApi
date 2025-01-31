@@ -216,9 +216,9 @@
                         Id = s.Id,
                         Name = s.Name,
                         Category = s.Category,
-                        DoctorId = s.DoctorId,
                     }).ToList(),
-                    FullName = user.FirstName + " " + user.LastName,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
                     Email = user.Email ?? string.Empty,
                     ImagePath = user.ImagePath ?? string.Empty,
                     PhoneNumber = user.PhoneNumber!

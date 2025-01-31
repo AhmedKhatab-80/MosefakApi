@@ -7,10 +7,11 @@
         public int AppUserId { get; set; } // fk for AppUser to represent Patient and didn't put navigation because it's exist in another DB
         public DateTime StartDate { get; set; } 
         public DateTime EndDate { get; set; }
+        public AppointmentType AppointmentType { get; set; } = AppointmentType.Consultation;
         public string ProblemDescription { get; set; } = null!;
         public AppointmentStatus AppointmentStatus { get; set; } = AppointmentStatus.Scheduled;
-        public string? CancellationReason { get; set; }
-        public bool IsPaid { get; set; } // for Payment
+        public string? CancellationReason { get; set; } // will provide if the AppointmentStatus is set to Cancelled
+        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending; // for Payment
         public Payment Payment { get; set; } = null!; 
     }
 }

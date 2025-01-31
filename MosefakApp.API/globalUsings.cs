@@ -40,6 +40,8 @@ global using MosefakApp.Infrastructure.Identity.Seeding;
 global using MosefakApp.Core.Dtos.Doctor.Requests;
 global using MosefakApp.Core.Dtos.Doctor.Responses;
 global using MosefakApp.Core.IServices;
+global using MosefakApp.Core.Dtos.Appointment.Requests;
+global using MosefakApp.Core.Dtos.Appointment.Responses;
 
 
 

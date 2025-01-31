@@ -11,6 +11,16 @@
                 x => (AppointmentStatus)Enum.Parse(typeof(AppointmentStatus), x)
                 );
 
+            builder.Property(x => x.PaymentStatus).HasConversion(
+               x => x.ToString(),
+               x => (PaymentStatus)Enum.Parse(typeof(PaymentStatus), x)
+               );
+            
+            builder.Property(x => x.AppointmentType).HasConversion(
+               x => x.ToString(),
+               x => (AppointmentType)Enum.Parse(typeof(AppointmentType), x)
+               );
+
             builder.HasIndex(x => new { x.DoctorId, x.StartDate, x.EndDate }).IsUnique();
         }
     }

@@ -2,8 +2,36 @@
 {
     public class AppointmentRepositoryAsync : GenericRepositoryAsync<Appointment>, IAppointmentRepositoryAsync
     {
+        private readonly AppDbContext _context;
         public AppointmentRepositoryAsync(AppDbContext context) : base(context)
         {
+            _context = context;
+        }
+
+        public async Task<IEnumerable<AppointmentResponse>> GetAppointments(Expression<Func<Appointment, bool>> expression)
+        {
+            var appointments = await _context.Appointments.Include(x => x.Doctor)
+                                                   .ThenInclude(x => x.Specializations)
+                                                   .Where(expression)
+                                                   .Select(x =>
+                                                                new AppointmentResponse
+                                                                {
+                                                                    Id = x.Id,
+                                                                    DoctorId = x.Doctor.AppUserId,
+                                                                    StartDate = x.StartDate,
+                                                                    EndDate = x.EndDate,
+                                                                    AppointmentType = x.AppointmentType,
+                                                                    DoctorSpecialization = x.Doctor.Specializations.Select(s => new SpecializationResponse
+                                                                    {
+                                                                        Id = s.Id,
+                                                                        Name = s.Name,
+                                                                        Category = s.Category,
+                                                                    })
+                                                       .ToList()
+                                                                })
+                                                   .ToListAsync();
+
+            return appointments;
         }
     }
 }
