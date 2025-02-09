@@ -6,12 +6,14 @@
         private readonly AppIdentityDbContext _context;
         private readonly SignInManager<AppUser> _signInManager;
         private readonly IRoleService _roleService;
+        private readonly ICacheService _cacheService;
         private readonly IMapper _mapper;
-        public UserService(UserManager<AppUser> userManager, IMapper mapper, AppIdentityDbContext context, IRoleService roleService, SignInManager<AppUser> signInManager)
+        public UserService(UserManager<AppUser> userManager, IMapper mapper, AppIdentityDbContext context, IRoleService roleService, ICacheService cacheService, SignInManager<AppUser> signInManager)
         {
             _userManager = userManager;
             _mapper = mapper;
             _context = context;
+            _cacheService = cacheService;
             _roleService = roleService;
             _signInManager = signInManager;
         }
@@ -43,7 +45,7 @@
         #endregion
 
         #region get users with roles that belong them 
-        public async Task<IList<UserResponse>> GetUsersAsync(bool IncludeDeleted = false)
+        public async Task<List<UserResponse>> GetUsersAsync(bool IncludeDeleted = false)
         {
             var query = _context.Users.AsQueryable();
 
@@ -55,7 +57,7 @@
             var users = await (from u in query
                                select new UserResponse
                                {
-                                   Id = u.Id,
+                                   Id = u.Id.ToString(),
                                    FullName = u.FirstName +' '+ u.LastName,
                                    Email = u.Email!,
                                    IsDisabled = u.IsDisabled,
@@ -93,7 +95,7 @@
 
                 list.Add(new UserResponse
                 {
-                    Id = user.Id,
+                    Id = user.Id.ToString(),
                     FullName = user.FirstName +" "+ user.LastName,
                     Email = user.Email!,
                     IsDisabled = user.IsDisabled,
@@ -139,7 +141,7 @@
 
             return new UserResponse
             {
-                Id = user.Id,
+                Id = user.Id.ToString(),
                 FullName = user.FirstName+" "+ user.LastName,
                 Email = user.Email!,
                 IsDisabled = user.IsDisabled,
@@ -155,7 +157,7 @@
                               where u.Id == id
                               select new UserResponse
                               {
-                                  Id = u.Id,
+                                  Id = u.Id.ToString(),
                                   FullName = u.FirstName + " " + u.LastName,
                                   Email = u.Email!,
                                   IsDisabled = u.IsDisabled,
@@ -270,6 +272,9 @@
             var userResponse = _mapper.Map<UserResponse>(appUser);
             userResponse.Roles = request.Roles ?? new List<string>();
 
+            await _cacheService.RemoveCachedResponseAsync("/api/Users|includeDeleted-false");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users/{appUser.Id}");
+
             return userResponse;
         }
         #endregion
@@ -292,6 +297,9 @@
 
                 throw new BadRequest(error!.Description ?? "Error happens");
             }
+
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users|includeDeleted-false");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users/{id}");
         }
         #endregion
 
@@ -311,6 +319,9 @@
 
                 throw new BadRequest(error);
             }
+
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users|includeDeleted-false");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users/{id}");
         }
 
         #endregion
@@ -334,6 +345,8 @@
             {
                 throw new BadRequest(string.Join(",", result.Errors.Select(x => x.Description).ToList()));
             }
+
+            await _cacheService.RemoveCachedResponseAsync($"/api/Users/{userId}");
 
             await _signInManager.RefreshSignInAsync(user!);
         }

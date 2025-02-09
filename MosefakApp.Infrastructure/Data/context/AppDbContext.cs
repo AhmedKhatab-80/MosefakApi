@@ -5,6 +5,7 @@
         public DbSet<Doctor> Doctors { get; set; }
         public DbSet<WorkingTime> WorkingTimes { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<AppointmentType> AppointmentTypes { get; set; }
         public DbSet<Review> Reviews { get; set; }
         public DbSet<ClinicAddress> ClinicAddresses { get; set; }
         public DbSet<Specialization> Specializations { get; set; }
@@ -23,17 +24,23 @@
 
             modelBuilder.Ignore<BaseEntity>();
 
+            var cascadeFKs = modelBuilder.Model.GetEntityTypes()
+                                               .SelectMany(t => t.GetForeignKeys())
+                                               .Where(fk => !fk.IsOwnership && fk.DeleteBehavior == DeleteBehavior.Cascade);
+
+            foreach (var fk in cascadeFKs)
+                fk.DeleteBehavior = DeleteBehavior.Restrict;
+
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
 
-        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var entries = ChangeTracker.Entries<BaseEntity>();
 
             var CurrentUserIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier);
 
             int? CurrentUserId = null;
-
             if (CurrentUserIdClaim != null && int.TryParse(CurrentUserIdClaim.Value, out var parsedUserId))
             {
                 CurrentUserId = parsedUserId;
@@ -43,16 +50,21 @@
             {
                 if (entryEntity != null && CurrentUserId is not null)
                 {
-
                     if (entryEntity.State == EntityState.Added)
                     {
                         entryEntity.Property(x => x.CreatedAt).CurrentValue = DateTime.UtcNow;
                         entryEntity.Property(x => x.CreatedByUserId).CurrentValue = CurrentUserId.Value;
+
+                        // ✅ Check if it's a new Review, then increment the Doctor's NumberOfReviews
+                        if (entryEntity.Entity is Review review)
+                        {
+                            await UpdateDoctorReviewCount(review.AppUserId, 1);
+                        }
                     }
                     else if (entryEntity.State == EntityState.Modified)
                     {
-
-                        if (entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue is null && entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue is null)
+                        if (entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue is null &&
+                            entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue is null)
                         {
                             entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue = CurrentUserId.Value;
                             entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue = DateTime.UtcNow;
@@ -66,16 +78,32 @@
                     else if (entryEntity.State == EntityState.Deleted && entryEntity.Entity is ISoftDeletable)
                     {
                         entryEntity.State = EntityState.Modified;
-
                         entryEntity.Property(x => x.DeletedTime).CurrentValue = DateTime.Now;
                         entryEntity.Property(x => x.IsDeleted).CurrentValue = true;
                         entryEntity.Property(x => x.DeletedByUserId).CurrentValue = CurrentUserId.Value;
+
+                        // ✅ Check if a Review is being deleted, then decrement the Doctor's NumberOfReviews
+                        if (entryEntity.Entity is Review review)
+                        {
+                            await UpdateDoctorReviewCount(review.AppUserId, -1);
+                        }
                     }
                 }
             }
 
-            return base.SaveChangesAsync(cancellationToken);
+            return await base.SaveChangesAsync(cancellationToken);
         }
+
+        private async Task UpdateDoctorReviewCount(int doctorId, int change)
+        {
+            var doctor = await Set<Doctor>().FirstOrDefaultAsync(d => d.Id == doctorId);
+            if (doctor is not null)
+            {
+                doctor.NumberOfReviews += change;
+                await SaveChangesAsync(); // Ensure the update is persisted
+            }
+        }
+
     }
     //public class BloggingContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     //{

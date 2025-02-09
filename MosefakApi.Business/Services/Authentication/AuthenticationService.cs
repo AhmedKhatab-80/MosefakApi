@@ -127,7 +127,7 @@
 
             // Assign Registered Users to Default Role
 
-            await _userManager.AddToRoleAsync(user, DefaultRole.Member);
+            await _userManager.AddToRoleAsync(user, DefaultRole.Patient);
         }
 
         public async Task ResendConfirmationEmail(ResendConfirmationEmailRequest request)

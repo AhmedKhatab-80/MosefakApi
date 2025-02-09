@@ -93,7 +93,10 @@
             services.AddScoped(typeof(IDoctorService), typeof(DoctorService));
             services.AddScoped(typeof(IPatientService), typeof(PatientService));
             services.AddScoped(typeof(IAppointmentService), typeof(AppointmentService));
-
+            services.AddScoped(typeof(IImageService), typeof(ImageService));
+            services.AddScoped<IIdProtectorService, IdProtectorService>();
+            services.AddSingleton<ICacheService, CacheService>();
+            services.AddSingleton<ILoggerService, LoggerService>();
 
             return services;
         }
@@ -122,5 +125,6 @@
             return services;
         }
 
+     
     }
 }

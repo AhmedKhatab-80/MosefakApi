@@ -4,10 +4,12 @@
     {
         private readonly RoleManager<AppRole> _roleManager;
         private readonly AppIdentityDbContext _Context;
+        private readonly ICacheService _cacheService;
         private readonly IMapper _mapper;
-        public RoleService(RoleManager<AppRole> roleManager, IMapper mapper, AppIdentityDbContext context)
+        public RoleService(RoleManager<AppRole> roleManager, ICacheService cacheService, IMapper mapper, AppIdentityDbContext context)
         {
             _roleManager = roleManager;
+            _cacheService = cacheService;
             _mapper = mapper;
             _Context = context;
         }
@@ -24,7 +26,7 @@
 
             var rolesResponse = await rolesQuery.Select(x => new RoleResponse
             {
-                Id = x.Id,
+                Id = x.Id.ToString(),
                 Name = x.Name!,
                 IsDeleted = x.IsDeleted,
             })
@@ -56,7 +58,7 @@
                                  on r.Id equals c.RoleId into claims
                                  select new RoleResponse
                                  {
-                                     Id = r.Id,
+                                     Id = r.Id.ToString(),
                                      Name = r.Name!,
                                      IsDeleted = r.IsDeleted,
                                      Permissions = claims.Select(x => x.ClaimValue).ToList()!
@@ -98,7 +100,7 @@
 
                 list.Add(new RoleResponse
                 {
-                    Id = role.Id,
+                    Id = role.Id.ToString(),
                     Name = role.Name!,
                     IsDeleted = role.IsDeleted,
                     Permissions = claims.Select(x => x.Value).ToList()! ?? new List<string>()
@@ -114,11 +116,11 @@
         {
             var roleResponse = await _roleManager.Roles.Select(x => new RoleResponse
             {
-                Id = x.Id,
+                Id = x.Id.ToString(),
                 Name = x.Name!,
                 IsDeleted = x.IsDeleted,
             })
-               .FirstOrDefaultAsync(x => x.Id == id);
+               .FirstOrDefaultAsync(x => x.Id == id.ToString());
 
 
             if (roleResponse is null)
@@ -137,7 +139,7 @@
                                       on r.Id equals c.RoleId into claims
                                       select new RoleResponse
                                       {
-                                          Id = r.Id,
+                                          Id = r.Id.ToString(),
                                           Name = r.Name!,
                                           IsDeleted = r.IsDeleted,
                                           Permissions = claims.Select(x => x.ClaimValue).ToList()!
@@ -163,7 +165,7 @@
 
             var roleResponse = new RoleResponse
             {
-                Id = role.Id,
+                Id = role.Id.ToString(),
                 Name = role.Name!,
                 IsDeleted = role.IsDeleted,
                 Permissions = claims.Select(x => x.Value).ToList()! ?? new List<string>(),
@@ -217,6 +219,8 @@
                 }
             }
 
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles");
+
             return GetRoleResponse(role, request);
         }
         #endregion
@@ -267,6 +271,9 @@
                 }
             }
 
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles/{id}");
+
             return GetRoleResponse(role, request);
         }
         #endregion
@@ -288,13 +295,40 @@
 
                 throw new InvalidOperation(error?.Description ?? "An unknown error occurred while creating the role.");
             }
+
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles/{id}");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles|IncludeDeleted-false");
+        }
+
+        public async Task<bool> AssignPermissionToRoleAsync(string roleId, AssignPermissionsRequest request)
+        {
+            var role = await _roleManager.FindByIdAsync(roleId);
+            if (role == null)
+                throw new ItemNotFound("Role not found");
+
+            var claims = request.Permissions.Select(p => new Claim(Permissions.Type, p)).ToList();
+
+            foreach (var claim in claims)
+            {
+                if (!(await _roleManager.GetClaimsAsync(role)).Any(c => c.Type == Permissions.Type && c.Value == claim.Value))
+                {
+                    var result = await _roleManager.AddClaimAsync(role, claim);
+                    if (!result.Succeeded)
+                        throw new BadRequest("Failed to assign permissions");
+                }
+            }
+
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles/{roleId}");
+            await _cacheService.RemoveCachedResponseAsync($"/api/Roles|IncludeDeleted-false");
+
+            return true;
         }
 
         private RoleResponse GetRoleResponse(AppRole role, RoleRequest request)
         {
             return new RoleResponse
             {
-                Id = role.Id,
+                Id = role.Id.ToString(),
                 Name = role.Name!,
                 IsDeleted = role.IsDeleted,
                 Permissions = request.Permissions ?? new List<string>()

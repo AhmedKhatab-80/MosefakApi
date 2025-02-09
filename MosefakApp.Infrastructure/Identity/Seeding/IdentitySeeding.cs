@@ -61,7 +61,7 @@
                     EmailConfirmed = true, // beacuse this is admin
                     Address = new Address()
                     {
-                        AppUserId = 2,
+                        //AppUserId = 2,
                         State = DefaultUser.State,
                         City = DefaultUser.City,
                         Street = DefaultUser.Street,
@@ -79,11 +79,19 @@
                 {
                     Name = DefaultRole.Admin,
                     ConcurrencyStamp = DefaultRole.AdminConcurrencyStamp,
+                    CreationTime = DateTime.UtcNow,
                 },
                 new AppRole
                 {
-                    Name = DefaultRole.Member,
-                    ConcurrencyStamp = DefaultRole.MemberConcurrencyStamp,
+                    Name = DefaultRole.Doctor,
+                    ConcurrencyStamp = DefaultRole.DoctorConcurrencyStamp,
+                    CreationTime = DateTime.UtcNow,
+                },
+                new AppRole
+                {
+                    Name = DefaultRole.Patient,
+                    ConcurrencyStamp = DefaultRole.PatientConcurrencyStamp,
+                    CreationTime = DateTime.UtcNow,
                 }
             };
         }
@@ -95,11 +103,6 @@
                 new IdentityUserRole<int>
                 {
                     RoleId = DefaultRole.AdminId,
-                    UserId = DefaultUser.AdminId,
-                },
-                new IdentityUserRole<int>
-                {
-                    RoleId = DefaultRole.MemberId,
                     UserId = DefaultUser.AdminId,
                 }
             };

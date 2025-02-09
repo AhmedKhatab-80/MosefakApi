@@ -4,7 +4,7 @@
     {
 
         // For admin
-        Task<IList<UserResponse>> GetUsersAsync(bool IncludeDeleted = false);
+        Task<List<UserResponse>> GetUsersAsync(bool IncludeDeleted = false);
         Task<UserResponse> GetUserByIdAsync(int id);
         Task<UserResponse> CreateUserAsync(UserRequest request);
         Task<UserResponse> UpdateUserAsync(int id, UserRequest request);

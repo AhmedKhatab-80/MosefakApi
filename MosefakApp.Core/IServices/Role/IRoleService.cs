@@ -7,5 +7,6 @@
         Task<RoleResponse> AddRoleAsync(RoleRequest request);
         Task<RoleResponse> EditRoleAsync(int id, RoleRequest request);
         Task DeleteRoleAsync(int id);
+        Task<bool> AssignPermissionToRoleAsync(string roleId, AssignPermissionsRequest request);
     }
 }

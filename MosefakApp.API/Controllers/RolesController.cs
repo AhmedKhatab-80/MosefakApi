@@ -3,50 +3,92 @@
     [Route("api/[controller]")]
     [ApiController]
     [Cached(duration: 600)]
+    [EnableRateLimiting(policyName: RateLimiterType.Concurrency)]
     public class RolesController : ControllerBase
     {
         private readonly IRoleService _roleService;
+        private readonly IIdProtectorService _idProtectorService;
 
-        public RolesController(IRoleService roleService)
+        public RolesController(IRoleService roleService, IIdProtectorService idProtectorService)
         {
             _roleService = roleService;
+            _idProtectorService = idProtectorService;
         }
 
         [HttpGet]
-        [HasPermission(Permissions.GetAllRoles)]
-        public async Task<IList<RoleResponse>> Get(bool IncludeDeleted = false)
+        [HasPermission(Permissions.ViewRoles)]
+        public async Task<ActionResult<IList<RoleResponse>>> Get([FromQuery] bool IncludeDeleted = false)
         {
-            return await _roleService.GetRolesAsync(IncludeDeleted);
+            var roles = await _roleService.GetRolesAsync(IncludeDeleted);
+
+            roles.ToList().ForEach(r => r.Id = ProtectId(r.Id));
+
+            return Ok(roles);
         }
 
-        [HttpGet("GetById/{id}")]
-        [HasPermission(Permissions.GetRoleById)]
-        public async Task<RoleResponse> GetById(int id)
+        [HttpGet("{id}")]
+        [HasPermission(Permissions.ViewRoleById)]
+        public async Task<ActionResult<RoleResponse>> GetById(string id)
         {
-            return await _roleService.GetRoleByIdAsync(id);
+            var unprotectedId = UnprotectId(id);
+
+            if (unprotectedId == null)
+                return BadRequest("Invalid ID");
+
+            var response = await _roleService.GetRoleByIdAsync(unprotectedId.Value);
+            response.Id = ProtectId(response.Id);
+
+            return Ok(response);
         }
 
         [HttpPost]
-        [HasPermission(Permissions.AddRole)]
+        [HasPermission(Permissions.CreateRole)]
         public async Task<RoleResponse> Add(RoleRequest request)
         {
             return await _roleService.AddRoleAsync(request);
         }
 
-        [HttpPut("Edit/{id}")]
+        [HttpPut("{id}")]
         [HasPermission(Permissions.EditRole)]
-        public async Task<RoleResponse> Edit(int id, RoleRequest request)
+        public async Task<ActionResult<RoleResponse>> Edit(string id, RoleRequest request)
         {
-            return await _roleService.EditRoleAsync(id, request);
+            var unprotectedId = UnprotectId(id);
+
+            if (unprotectedId == null)
+                return BadRequest("Invalid ID");
+
+            var response = await _roleService.EditRoleAsync(unprotectedId.Value, request);
+            response.Id = ProtectId(response.Id);
+
+            return Ok(response);
         }
 
-        [HttpDelete("Delete/{id}")]
+        [HttpDelete("{id}")]
         [HasPermission(Permissions.DeleteRole)]
-        public async Task<ActionResult> Delete(int id)
+        public async Task<ActionResult> Delete(string id)
         {
-            await _roleService.DeleteRoleAsync(id);
+            var unprotectedId = UnprotectId(id);
 
-            return Ok();
+            if (unprotectedId == null)
+                return BadRequest("Invalid ID");
+
+            await _roleService.DeleteRoleAsync(unprotectedId.Value);
+
+            return NoContent();
         }
+
+        [HttpPut("{roleId}")]
+        [HasPermission(Permissions.AssignPermissionToRole)]
+        public async Task<ActionResult<bool>> AssignPermissionToRoleAsync(string roleId, AssignPermissionsRequest request)
+        {
+            var query = await _roleService.AssignPermissionToRoleAsync(roleId, request);
+
+            return Ok(query);
+        }
+
+        // 🔥 Reusable Helper Method for ID Protection
+        private int? UnprotectId(string protectedId) => _idProtectorService.UnProtect(protectedId);
+
+        private string ProtectId(string id) => _idProtectorService.Protect(int.Parse(id));
     }
 }

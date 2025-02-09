@@ -2,39 +2,39 @@
 {
     public class CacheService : ICacheService 
     {
-        private readonly IDatabase _database;
+        private readonly IMemoryCache _memoryCache;
 
-        public CacheService(IConnectionMultiplexer multiplexer)
+        public CacheService(IMemoryCache memoryCache)
         {
-            _database = multiplexer.GetDatabase();
+            _memoryCache = memoryCache;
         }
 
-        public async Task CacheResponseAsync(string cacheKey, object response, TimeSpan duration)
+        public async Task CacheResponseAsync(string key, object response, TimeSpan duration)
         {
-            if (response is null)
-                return;
-
-            var jsonOptions = new JsonSerializerOptions()
+            var jsonOptions = new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase, // For Front-end
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             };
 
-            await _database.StringSetAsync(cacheKey, JsonSerializer.Serialize(response, jsonOptions), duration);
+            var serilizedResponse = JsonSerializer.Serialize(response, jsonOptions);
+
+            _memoryCache.Set(key, serilizedResponse, duration);
+
+            await Task.CompletedTask;
         }
 
-        public async Task<string?> GetCachedResponse(string cacheKey)
+        public async Task<string> GetCachedResponseAsync(string key)
         {
-            var response = await _database.StringGetAsync(cacheKey);
+            _memoryCache.TryGetValue(key, out string cachedResponse);
 
-            if (response.IsNullOrEmpty)
-                return null;
-
-            return response;
+            return await Task.FromResult(cachedResponse!);
         }
 
-        public Task RemoveCacheKey(string cacheKey)
+        public Task RemoveCachedResponseAsync(string key)
         {
-            throw new NotImplementedException();
+            _memoryCache.Remove(key);
+
+            return Task.CompletedTask;
         }
     }
 }

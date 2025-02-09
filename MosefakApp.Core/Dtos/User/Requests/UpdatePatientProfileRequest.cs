@@ -4,7 +4,7 @@
     {
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
-        public string? ImagePath { get; set; }
+        public IFormFile? ImagePath { get; set; }
         public string? PhoneNumber { get; set; }
         public Gender? Gender { get; set; }
         public AddressUserResponse Address { get; set; } = null!;

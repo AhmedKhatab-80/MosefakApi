@@ -2,6 +2,8 @@
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Cached(duration: 600)] // 10 minutes
+    [EnableRateLimiting(policyName: RateLimiterType.Concurrency)]
     public class PatientsController : ControllerBase
     {
         private readonly IPatientService _patientService;
@@ -12,6 +14,7 @@
         }
 
         [HttpGet("profile")]
+        [HasPermission(Permissions.ViewPatientProfile)]
         public async Task<ActionResult<UserProfileResponse>> PatientProfile()
         {
             int userId = User.GetUserId();
@@ -22,7 +25,8 @@
         }
 
         [HttpPut]
-        public async Task<ActionResult<UserProfileResponse>> UpdatePatientProfile(UpdatePatientProfileRequest request)
+        [HasPermission(Permissions.EditPatientProfile)]
+        public async Task<ActionResult<UserProfileResponse>> UpdatePatientProfile([FromForm] UpdatePatientProfileRequest request)
         {
             int userId = User.GetUserId();
 

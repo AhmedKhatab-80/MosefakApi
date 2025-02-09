@@ -16,7 +16,7 @@
 
             var cachedKey = GenerateCachedKey(context.HttpContext.Request);
 
-            var cachedResponse = await cacheService.GetCachedResponse(cachedKey);
+            var cachedResponse = await cacheService.GetCachedResponseAsync(cachedKey);
 
             if (cachedResponse != null)
             {

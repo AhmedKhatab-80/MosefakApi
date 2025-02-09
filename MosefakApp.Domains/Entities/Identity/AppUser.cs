@@ -13,14 +13,7 @@
         public bool IsDisabled { get; set; } = false;
         
         [NotMapped]
-        public int Age 
-        {
-            get
-            {
-                if (DateOfBirth is null)
-                    return 0;
-                return DateTime.Now.Year - DateOfBirth.Value.Year;
-            }
-        }
+        public int Age => (DateOfBirth is null) ? 0 : DateTime.Now.Year - DateOfBirth.Value.Year;
+        
     }
 }

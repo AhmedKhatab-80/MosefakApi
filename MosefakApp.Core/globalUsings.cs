@@ -1,4 +1,5 @@
 ﻿global using AutoMapper;
+global using FluentValidation;
 global using System.ComponentModel.DataAnnotations;
 global using MosefakApp.Core.Dtos.Role.Request;
 global using MosefakApp.Core.Dtos.Role.Responses;
@@ -24,6 +25,19 @@ global using MosefakApp.Core.Dtos.Schedule.Requests;
 global using MosefakApp.Core.Dtos.Specialization.Requests;
 global using MosefakApp.Domains.Entities.Identity;
 global using MosefakApp.Core.Dtos.Appointment.Responses;
+global using MosefakApp.Core.Dtos.Appointment.Requests;
+global using MosefakApp.Core.IRepositories.Non_Generic;
+global using Microsoft.EntityFrameworkCore.Storage;
+global using MosefakApp.Core.Dtos.AppointmentType.Requests;
+global using Microsoft.AspNetCore.Http;
+global using MosefakApp.Core.Dtos.BaseValidators;
+
+
+
+
+
+
+
 
 
 

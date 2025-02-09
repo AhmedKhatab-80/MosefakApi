@@ -42,7 +42,13 @@ global using MosefakApp.Core.Dtos.Doctor.Responses;
 global using MosefakApp.Core.IServices;
 global using MosefakApp.Core.Dtos.Appointment.Requests;
 global using MosefakApp.Core.Dtos.Appointment.Responses;
-
+global using FluentValidation;
+global using FluentValidation.AspNetCore;
+global using MosefakApp.Core.Dtos.Appointment.Validators;
+global using MosefakApp.Core.IServices.Data_Protection;
+global using Microsoft.AspNetCore.RateLimiting;
+global using MosefakApp.Core.Abstractions;
+global using Serilog;
 
 
 

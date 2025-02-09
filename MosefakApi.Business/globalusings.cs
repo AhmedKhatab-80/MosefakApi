@@ -47,5 +47,18 @@ global using MosefakApp.Domains.Entities;
 global using MosefakApp.Core.IRepositories.Non_Generic;
 global using MosefakApp.Core.Dtos.Appointment.Responses;
 global using MosefakApp.Domains.Enums;
+global using MosefakApp.Core.Dtos.Appointment.Requests;
+global using MosefakApp.Core.IServices.Image;
+global using Microsoft.Extensions.Configuration;
+global using System.Transactions;
+global using MosefakApp.Core.IServices.Data_Protection;
+global using Microsoft.AspNetCore.DataProtection;
+global using Microsoft.Extensions.Caching.Memory;
+global using MosefakApp.Core.IServices.Logging;
+
+
+
+
+
 
 

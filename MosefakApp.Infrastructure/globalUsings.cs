@@ -26,6 +26,11 @@ global using MosefakApp.Core.Dtos.Doctor.Responses;
 global using MosefakApp.Core.Dtos.Review.Responses;
 global using MosefakApp.Core.Dtos.Specialization.Responses;
 global using MosefakApp.Core.Dtos.Appointment.Responses;
+global using Microsoft.EntityFrameworkCore.Storage;
+global using MosefakApp.Shared.Exceptions.Base;
+global using Microsoft.Extensions.Configuration;
+global using MosefakApp.Core.Dtos.ClinicAddress.Responses;
+global using MosefakApp.Core.Dtos.Schedule.Responses;
 
 
 

@@ -1,11 +1,9 @@
 ﻿namespace MosefakApp.Core.IServices.Cache
 {
-
     public interface ICacheService
     {
-        Task CacheResponseAsync(string cacheKey, object response, TimeSpan duration);
-        Task<string?> GetCachedResponse(string cacheKey);
-        Task RemoveCacheKey(string cacheKey);
+        Task<string> GetCachedResponseAsync(string key);
+        Task CacheResponseAsync(string key, object response, TimeSpan duration);
+        Task RemoveCachedResponseAsync(string key);
     }
-
 }

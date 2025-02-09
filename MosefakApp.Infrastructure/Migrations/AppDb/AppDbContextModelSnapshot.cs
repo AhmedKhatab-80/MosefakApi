@@ -37,9 +37,8 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("AppointmentType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("AppointmentTypeId")
+                        .HasColumnType("int");
 
                     b.Property<string>("CancellationReason")
                         .HasColumnType("nvarchar(max)");
@@ -87,10 +86,67 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     b.HasKey("Id", "AppUserId", "DoctorId");
 
+                    b.HasIndex("AppointmentTypeId");
+
                     b.HasIndex("DoctorId", "StartDate", "EndDate")
                         .IsUnique();
 
                     b.ToTable("Appointments", (string)null);
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.AppointmentType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ConsultationFee")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("Duration")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("FirstUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FirstUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VisitType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.ToTable("AppointmentTypes", (string)null);
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.ClinicAddress", b =>
@@ -164,9 +220,6 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     b.Property<int>("AppUserId")
                         .HasColumnType("int");
-
-                    b.Property<decimal>("ConsultationFee")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -539,10 +592,29 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Appointment", b =>
                 {
+                    b.HasOne("MosefakApp.Domains.Entities.AppointmentType", "AppointmentType")
+                        .WithMany("Appointments")
+                        .HasForeignKey("AppointmentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
                         .WithMany()
                         .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AppointmentType");
+
+                    b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.AppointmentType", b =>
+                {
+                    b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
+                        .WithMany("AppointmentTypes")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Doctor");
@@ -553,7 +625,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
                         .WithMany("ClinicAddresses")
                         .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Doctor");
@@ -603,7 +675,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.HasOne("MosefakApp.Domains.Entities.Appointment", "Appointment")
                         .WithOne("Payment")
                         .HasForeignKey("MosefakApp.Domains.Entities.Payment", "AppointmentId", "AppointmentAppUserId", "AppointmentDoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Appointment");
@@ -621,7 +693,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
                         .WithMany("Specializations")
                         .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Doctor");
@@ -632,7 +704,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
                         .WithMany("WorkingTimes")
                         .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Doctor");
@@ -640,12 +712,18 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Appointment", b =>
                 {
-                    b.Navigation("Payment")
-                        .IsRequired();
+                    b.Navigation("Payment");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.AppointmentType", b =>
+                {
+                    b.Navigation("Appointments");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Doctor", b =>
                 {
+                    b.Navigation("AppointmentTypes");
+
                     b.Navigation("ClinicAddresses");
 
                     b.Navigation("Reviews");

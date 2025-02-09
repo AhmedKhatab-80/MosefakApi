@@ -4,12 +4,14 @@
     {
         private readonly IUnitOfWork<Appointment> _unitOfWork;
         private readonly UserManager<AppUser> _userManager;
+        private readonly ICacheService _cacheService;
         private readonly IMapper _mapper;
 
-        public AppointmentService(IUnitOfWork<Appointment> unitOfWork, UserManager<AppUser> userManager, IMapper mapper)
+        public AppointmentService(IUnitOfWork<Appointment> unitOfWork, UserManager<AppUser> userManager, ICacheService cacheService, IMapper mapper)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
+            _cacheService = cacheService;
             _mapper = mapper;
         }
 
@@ -64,15 +66,122 @@
             await _unitOfWork.AppointmentRepositoryAsync.UpdateEntityAsync(appointment);
             await _unitOfWork.CommitAsync();
 
-           // _logger.LogInformation($"Appointment {appointmentId} was cancelled by user {appointment.AppUserId}.");
+            // _logger.LogInformation($"Appointment {appointmentId} was cancelled by user {appointment.AppUserId}.");
+
+            await _cacheService.RemoveCachedResponseAsync("/api/Appointments/canceled-appointments");
 
             return true;
         }
 
         // StartDate must be before EndDate in reschudle.
-        public Task<bool> RescheduleAppointmentAsync(int appointmentId, DateTime newDateTime)
+        public async Task<bool> RescheduleAppointmentAsync(int appointmentId, DateTime newStartDate)
         {
-            throw new NotImplementedException();
+            var appointment = await _unitOfWork.AppointmentRepositoryAsync.GetByIdAsync(appointmentId);
+
+            if (appointment is null)
+                throw new ItemNotFound("not exist appointment");
+
+            if (newStartDate < DateTime.Now)
+                throw new BadRequest("Can't reschedule in the past");
+
+            if (appointment.AppointmentStatus == AppointmentStatus.Completed || appointment.AppointmentStatus == AppointmentStatus.Cancelled)
+                throw new BadRequest("Can't reschedule canceled or completed appointment!");
+
+
+            // Calculate the new end date (assuming a fixed duration, e.g., 30 minutes)
+            var newEndDate = newStartDate.AddMinutes(30);
+
+            // Check if the new time slot is available
+            var isSlotAvailable = await _unitOfWork.AppointmentRepositoryAsync.IsTimeSlotAvailable(appointment.DoctorId, newStartDate, newEndDate);
+
+            if (!isSlotAvailable)
+            {
+                throw new InvalidOperationException("The selected time slot is no longer available.");
+            }
+
+            // Update the appointment
+            appointment.StartDate = newStartDate;
+            appointment.EndDate = newEndDate;
+            appointment.AppointmentStatus = AppointmentStatus.Rescheduled;
+
+            await _unitOfWork.RepositoryAsync.UpdateEntityAsync(appointment);
+            
+            var rowAffected = await _unitOfWork.CommitAsync();
+
+            if(rowAffected < 0)
+                return false;
+            else
+            {
+                // log $"Appointment {Id} rescheduled from {StartDate} to {newStartDate}."
+                await _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming-appointments");
+
+                return true;
+            }
+        }
+
+        public async Task<bool> BookAppointment(BookAppointmentRequest request, int appUserIdFromClaims)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+            try
+            {
+                var doctor = await _unitOfWork.DoctorRepositoryAsync.FirstOrDefaultASync(x => x.Id == request.DoctorId, ["AppointmentTypes"]);
+
+                if (doctor == null)
+                    throw new ItemNotFound("Doctor is not exist");
+
+                var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id == request.AppointmentTypeId);
+
+                if (appointmentType == null)
+                    throw new ItemNotFound("this appointment type is not exist for this doctor");
+
+                var endTime = new DateTime();
+
+                if (appointmentType.Duration.Hour == 0 && appointmentType.Duration.Minute > 0)
+                    endTime = request.StartDate.AddMinutes(appointmentType.Duration.Minute); 
+
+                if(appointmentType.Duration.Hour > 0 && appointmentType.Duration.Minute > 0)
+                    endTime = request.StartDate.Add(new TimeSpan(appointmentType.Duration.Hour, appointmentType.Duration.Minute, 0));
+
+                if (!await IsTimeSlotAvailable(doctor.Id, request.StartDate, endTime))
+                    throw new BadRequest("Can't book appointment already booked!, try another time");
+
+                var appointment = new Appointment()
+                {
+                    AppUserId = appUserIdFromClaims,
+                    DoctorId = request.DoctorId,
+                    AppointmentStatus = AppointmentStatus.Scheduled,
+                    AppointmentTypeId = request.AppointmentTypeId,
+                    PaymentStatus = PaymentStatus.Pending,
+                    StartDate = request.StartDate,
+                    ProblemDescription = request.ProblemDescription,
+                    EndDate = endTime,
+                };
+
+                // Add the appointment and commit the transaction
+
+                await _unitOfWork.AppointmentRepositoryAsync.AddEntityAsync(appointment);
+                
+                var rowsAffected = await _unitOfWork.CommitAsync();
+
+                await transaction.CommitAsync(); // ✅ Commit only if successful
+
+                await _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming-appointments");
+
+                return rowsAffected > 0;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(); // ✅ Rollback in case of failure
+                throw;
+            }
+        }
+
+        public async Task<bool> IsTimeSlotAvailable(int doctorId, DateTime startDate, DateTime endDate)
+        {
+            var query = await _unitOfWork.AppointmentRepositoryAsync.IsTimeSlotAvailable(doctorId, startDate, endDate);
+
+            return query;
         }
 
         private async Task<IEnumerable<AppointmentResponse>?> ProcessAppointments(IEnumerable<AppointmentResponse>? appointments)
@@ -121,6 +230,7 @@
             }
         }
 
+       
     }
 }
 

@@ -1,5 +1,6 @@
 ﻿namespace MosefakApp.API.Controllers
 {
+    [EnableRateLimiting(policyName: RateLimiterType.Concurrency)]
     public class AuthenticationController : ApiBaseController
     {
         private readonly IAuthenticationService _authenticationService;

@@ -9,9 +9,9 @@
             _context = context;
         }
 
+        public async Task<IEnumerable<AppUser>> GetAllUsersAsync() => await _context.Users.ToListAsync();
         public async Task<AppUser?> GetUserByIdAsync(int id) => await _context.Users.FindAsync(id);
 
-        public async Task<IEnumerable<AppUser>> GetAllUsersAsync() => await _context.Users.ToListAsync();
 
         public async Task UpdateUser(AppUser user)
         {
@@ -21,9 +21,9 @@
             });
         }
 
-        public async Task Save()
+        public async Task<int> Save()
         {
-            await _context.SaveChangesAsync();
+           return await _context.SaveChangesAsync();
         }
     }
 }

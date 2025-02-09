@@ -1,6 +1,6 @@
 ﻿namespace MosefakApp.Core.Dtos.Doctor.Requests
 {
-    public class DoctorRequest // don't forget add validation by FluentValidation later
+    public class DoctorRequest 
     {
         public int AppUserId { get; set; }
         public int YearOfExperience { get; set; }
@@ -9,6 +9,6 @@
         public IList<ClinicAddressRequest> ClinicAddresses { get; set; } = new List<ClinicAddressRequest>();
         public IList<SpecializationRequest> Specializations { get; set; } = new List<SpecializationRequest>();
         public ICollection<WorkingTimeRequest> WorkingTimes { get; set; } = new List<WorkingTimeRequest>();
-        public decimal ConsultationFee { get; set; }
+        public List<AppointmentTypeRequest> AppointmentTypes { get; set; } = new List<AppointmentTypeRequest>();
     }
 }

@@ -2,14 +2,16 @@
 {
     public interface IDoctorService
     {
-        Task<IList<DoctorResponse>> GetAllDoctors();
+        Task<List<DoctorResponse>> GetAllDoctors();
         Task<DoctorResponse> GetDoctorById(int doctorId);
         Task<DoctorProfileResponse> GetDoctorProfile(int appUserIdFromClaims);
-        Task<IList<DoctorDto>> TopTenDoctors();
+        Task<List<DoctorDto>?> TopTenDoctors();
         Task AddDoctor(DoctorRequest request); // for Admin, must pass appUserId explicitly
         Task CompleteDoctorProfile(int appUserIdFromClaims, CompleteDoctorProfileRequest doctor); // note, for Doctor: appUserId will take it from claims too and this represent doctor row in doctors table to update in his profile.
-        Task UpdateDoctorProfile(DoctorProfileUpdateRequest request, int appUserIdFromClaims);
-        Task DeleteDoctor(int doctorId);
+        Task UpdateDoctorProfile(DoctorProfileUpdateRequest request, int appUserIdFromClaims, CancellationToken cancellationToken = default);
+        Task DeleteDoctor(int doctorId); // for Admin
+        Task<List<DateTime>> GetAvailableTimeSlots(int doctorId, DateTime newStartDate, int appointmentTypeId);
+        Task<List<AppointmentTypeResponse>> GetAppointmentTypes(int doctorId);
     }
 }
 

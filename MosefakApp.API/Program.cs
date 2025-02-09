@@ -1,5 +1,6 @@
-var builder = WebApplication.CreateBuilder(args);
+﻿using Serilog;
 
+var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
@@ -10,11 +11,18 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 
 builder.Services.OptionsPatternConfig(builder.Configuration); // belong IOptions Pattern
 
+builder.Services.AddDataProtection();
+builder.Services.AddMemoryCache();
+
+// ✅ Configure Serilog from `appsettings.json`
+builder.Host.UseCustomSerilog();
+
 // Call Container here
 
 builder.Services.RegisterConfiguration(builder.Configuration);
 builder.Services.RegisterIdentityConfig();
 builder.Services.AddHttpContextAccessor();
+builder.Services.RegisterFluentValidationSettings();
 
 // for permission based authorization
 
@@ -57,6 +65,9 @@ app.UseHttpsRedirection();
 app.UseCors(x => x.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
 
 app.UseStaticFiles();  // it's very very Important after added wwwroot folder and folder of images that belong each entity. 
+
+// ✅ Log every request in a structured way
+app.UseSerilogRequestLogging();
 
 app.UseRateLimiter();
 

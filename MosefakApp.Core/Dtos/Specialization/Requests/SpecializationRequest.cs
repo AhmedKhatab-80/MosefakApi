@@ -2,7 +2,10 @@
 {
     public class SpecializationRequest
     {
+        [Required]
         public Specialty Name { get; set; } // Cardiology طب القلب
+
+        [Required]
         public SpecialtyCategory Category { get; set; } // Heart القلب
     }
 }

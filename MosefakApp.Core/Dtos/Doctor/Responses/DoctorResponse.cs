@@ -2,7 +2,7 @@
 {
     public class DoctorResponse
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public string FullName { get; set; } = null!;
         public string ImagePath { get; set; } = null!;
         public int YearOfExperience { get; set; }
@@ -12,7 +12,8 @@
         public IList<SpecializationResponse> Specializations { get; set; } = new List<SpecializationResponse>();
         public ICollection<ReviewResponse> Reviews { get; set; } = new List<ReviewResponse>();
         public ICollection<WorkingTimeResponse> WorkingTimes { get; set; } = new List<WorkingTimeResponse>();
-        public int NumberOfReviews { get; set; } 
-        public decimal ConsultationFee { get; set; }
+        public int NumberOfReviews { get; set; }
+        public IList<AppointmentTypeResponse> AppointmentTypes { get; set; } = new List<AppointmentTypeResponse>();
+
     }
 }

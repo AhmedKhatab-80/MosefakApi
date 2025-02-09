@@ -10,7 +10,9 @@
 
         public async Task<IEnumerable<AppointmentResponse>> GetAppointments(Expression<Func<Appointment, bool>> expression)
         {
-            var appointments = await _context.Appointments.Include(x => x.Doctor)
+            var appointments = await _context.Appointments
+                                                   .Include(x=> x.AppointmentType)
+                                                   .Include(x => x.Doctor)
                                                    .ThenInclude(x => x.Specializations)
                                                    .Where(expression)
                                                    .Select(x =>
@@ -20,7 +22,13 @@
                                                                     DoctorId = x.Doctor.AppUserId,
                                                                     StartDate = x.StartDate,
                                                                     EndDate = x.EndDate,
-                                                                    AppointmentType = x.AppointmentType,
+                                                                    AppointmentType = new AppointmentTypeResponse
+                                                                    {
+                                                                        Id = x.AppointmentType.Id.ToString(),
+                                                                        ConsultationFee = x.AppointmentType.ConsultationFee,
+                                                                        Duration = x.AppointmentType.Duration,
+                                                                        VisitType = x.AppointmentType.VisitType
+                                                                    },
                                                                     DoctorSpecialization = x.Doctor.Specializations.Select(s => new SpecializationResponse
                                                                     {
                                                                         Id = s.Id,
@@ -32,6 +40,17 @@
                                                    .ToListAsync();
 
             return appointments;
+        }
+
+        public async Task<bool> IsTimeSlotAvailable(int doctorId, DateTime startDate, DateTime endDate)
+        {
+            var overlappingAppointments = await _context.Appointments
+                .Where(a => a.DoctorId == doctorId &&
+                            a.StartDate < endDate &&
+                            a.EndDate > startDate)
+                .ToListAsync();
+
+            return !overlappingAppointments.Any();
         }
     }
 }
