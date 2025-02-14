@@ -62,10 +62,9 @@
                     Address = new Address()
                     {
                         //AppUserId = 2,
-                        State = DefaultUser.State,
+                        Country = DefaultUser.State,
                         City = DefaultUser.City,
                         Street = DefaultUser.Street,
-                        ZipCode = DefaultUser.ZipCode
                     }
                 }
             };

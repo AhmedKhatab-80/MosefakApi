@@ -71,10 +71,9 @@
             if (request.Address != null)
             {
                 user.Address ??= new Address();
-                user.Address.State = request.Address.State;
+                user.Address.Country = request.Address.Country;
                 user.Address.City = request.Address.City;
                 user.Address.Street = request.Address.Street;
-                user.Address.ZipCode = request.Address.ZipCode;
             }
                 
             var result = await _userManager.UpdateAsync(user);

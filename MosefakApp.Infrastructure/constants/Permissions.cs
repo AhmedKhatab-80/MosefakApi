@@ -24,7 +24,11 @@
         public const string ViewTopTenDoctors = "Permissions.Doctors.ViewTopTenDoctors";
         public const string ViewAvailableTimeSlots = "Permissions.Doctors.ViewAvailableTimeSlots";
         public const string ViewAppointmentTypes = "Permissions.Doctors.ViewAppointmentTypes";
+        public const string ViewUpcomingAppointmentsForDoctor = "Permissions.Doctors.ViewUpcomingAppointmentsForDoctor";
+        public const string ViewPastAppointmentsForDoctor = "Permissions.Doctors.ViewPastAppointmentsForDoctor";
+        public const string GetTotalAppointmentsAsync = "Permissions.Doctors.GetTotalAppointmentsAsync";
         public const string CreateDoctor = "Permissions.Doctors.Create";
+        public const string UploadDoctorProfileImage = "Permissions.Doctors.uploadImage";
         public const string CompleteDoctorProfile = "Permissions.Doctors.CompleteDoctorProfile";
         public const string EditDoctor = "Permissions.Doctors.Edit";
         public const string EditDoctorProfile = "Permissions.Doctors.EditDoctorProfile";
@@ -33,9 +37,14 @@
         public const string ViewUpcomingAppointments = "Permissions.Appointments.ViewUpcomingAppointments";
         public const string ViewCanceledAppointments = "Permissions.Appointments.ViewCanceledAppointments";
         public const string ViewCompletedAppointments = "Permissions.Appointments.ViewCompletedAppointments";
-        public const string CancelAppointment = "Permissions.Appointments.CancelAppointment";
+        public const string CancelAppointmentByDoctor = "Permissions.Appointments.CancelAppointmentByDoctor";
+        public const string CancelAppointmentByPatient = "Permissions.Appointments.CancelAppointmentByPatient";
+        public const string ApproveAppointment = "Permissions.Appointments.ApproveAppointment";
+        public const string RejectAppointment = "Permissions.Appointments.RejectAppointment";
+        public const string MarkAppointmentAsCompleted = "Permissions.Appointments.MarkAppointmentAsCompleted";
         public const string RescheduleAppointment = "Permissions.Appointments.RescheduleAppointment";
         public const string BookAppointment = "Permissions.Appointments.BookAppointment";
+        public const string PayForAppointment = "Permissions.Appointments.PayForAppointment";
 
         public const string ViewPatientProfile = "Permissions.Patients.ViewProfile";
         public const string EditPatientProfile = "Permissions.Patients.EditPatientProfile";

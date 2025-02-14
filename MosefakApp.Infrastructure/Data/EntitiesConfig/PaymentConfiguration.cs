@@ -6,10 +6,7 @@
         {
             builder.ToTable("Payments").HasKey(x => x.Id);
 
-            builder.Property(x => x.PaymentMethod).HasConversion(
-                x => x.ToString(),
-                x => (PaymentMethod)Enum.Parse(typeof(PaymentMethod), x)
-                );
+            builder.Property(x=> x.Amount).HasColumnType("decimal").HasPrecision(18,2).IsRequired();
         }
     }
 }

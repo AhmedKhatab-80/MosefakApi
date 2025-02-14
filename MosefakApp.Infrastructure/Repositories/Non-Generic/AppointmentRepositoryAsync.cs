@@ -42,7 +42,7 @@
             return appointments;
         }
 
-        public async Task<bool> IsTimeSlotAvailable(int doctorId, DateTime startDate, DateTime endDate)
+        public async Task<bool> IsTimeSlotAvailable(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
         {
             var overlappingAppointments = await _context.Appointments
                 .Where(a => a.DoctorId == doctorId &&

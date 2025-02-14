@@ -3,14 +3,25 @@
     public class Doctor : BaseEntity
     {
         public int AppUserId { get; set; } // to get another info like(email,phone,age,etc) from another database by using AppUserId
-        public int YearOfExperience { get; set; }
         public string LicenseNumber { get; set; } = null!;
         public string AboutMe { get; set; } = null!;
-        public List<ClinicAddress> ClinicAddresses { get; set; } = new List<ClinicAddress>(); 
-        public List<Specialization> Specializations { get; set; } = new List<Specialization>();
-        public ICollection<Review> Reviews { get; set; } = new List<Review>();
-        public List<WorkingTime> WorkingTimes { get; set; } = new List<WorkingTime>();
         public int NumberOfReviews { get; set; } = 0; // denormlized property for best performance  
+        
+        [NotMapped]
+        public int TotalYearsOfExperience => CalculateTotalExperience();
+        public List<Appointment> Appointments { get; set; } = new List<Appointment>();
+        public ICollection<Review> Reviews { get; set; } = new List<Review>();
+        public List<Specialization> Specializations { get; set; } = new List<Specialization>();
         public List<AppointmentType> AppointmentTypes { get; set; } = new List<AppointmentType>();
+        public ICollection<Award> Awards { get; set; } = new HashSet<Award>();
+        public ICollection<Experience> Experiences { get; set; } = new HashSet<Experience>();
+        public ICollection<Education> Educations { get; set; } = new HashSet<Education>();
+        public ICollection<Clinic> Clinics { get; set; } = new HashSet<Clinic>();
+        private int CalculateTotalExperience()
+        {
+            return Experiences.Sum(exp =>
+                (exp.CurrentlyWorkingHere ? DateTime.UtcNow.Year : exp.EndDate?.Year ?? DateTime.UtcNow.Year) - exp.StartDate.Year);
+        }
     }
+
 }

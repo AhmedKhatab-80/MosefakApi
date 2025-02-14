@@ -4,7 +4,6 @@
     {
         public CancelAppointmentRequestValidator()
         {
-            RuleFor(x => x.AppointmentId).GreaterThan(0).WithMessage("AppointmentId is invalid");
 
             // will check only in case patient enter CancelationReason to avoid exception
 

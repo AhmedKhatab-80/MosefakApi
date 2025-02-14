@@ -2,7 +2,6 @@
 {
     public class CancelAppointmentRequest
     {
-        public int AppointmentId { get; set; }
         public string? CancelationReason { get; set; }
     }
 }

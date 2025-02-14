@@ -3,9 +3,9 @@
     public class WorkingTimeResponse
     {
         public int Id { get; set; }
-        public int DoctorId { get; set; }
-        public DayOfWeek DayOfWeek { get; set; }
-        public TimeOnly StartTime { get; set; } // 08:00
-        public TimeOnly EndTime { get; set; }   // 23:00
+        public DayOfWeek Day { get; set; }
+        public ICollection<PeriodResponse> Periods { get; set; } = new HashSet<PeriodResponse>();
+        public int ClinicId { get; set; }
+        public bool IsAvailable { get; set; }
     }
 }

@@ -1,28 +1,42 @@
-﻿using Microsoft.Extensions.Configuration;
-
-namespace MosefakApp.Infrastructure.Unit
+﻿namespace MosefakApp.Infrastructure.Unit
 {
-    public class UnitOfWork<T> : IUnitOfWork<T> where T : BaseEntity
+    public class UnitOfWork : IUnitOfWork
     {
         private readonly AppDbContext _context;
-
+        private readonly Dictionary<Type, object> _repositories = new();
+        private readonly Dictionary<Type, object> _customRepositories = new();
         private IDbContextTransaction _transaction;
-        public IGenericRepositoryAsync<T> RepositoryAsync { get; }
 
-        public IDoctorRepositoryAsync DoctorRepositoryAsync { get; }
 
-        public IPatientRepositoryAsync PatientRepositoryAsync { get; }
-
-        public IAppointmentRepositoryAsync AppointmentRepositoryAsync { get; }
-        private readonly IConfiguration _configuration;
-        public UnitOfWork(AppDbContext appDbContext, AppIdentityDbContext appIdentityDb, IConfiguration configuration)
+        public UnitOfWork(AppDbContext context, IEnumerable<object> customRepositories)
         {
-            _context = appDbContext;
-            _configuration = configuration;
-            RepositoryAsync = new GenericRepositoryAsync<T>(appDbContext);
-            DoctorRepositoryAsync = new DoctorRepositoryAsync(appDbContext, appIdentityDb, _configuration);
-            PatientRepositoryAsync = new PatientRepositoryAsync(appDbContext);
-            AppointmentRepositoryAsync = new AppointmentRepositoryAsync(appDbContext);
+            _context = context;
+
+            // Add custom repositories
+            foreach (var repo in customRepositories)
+            {
+                _customRepositories[repo.GetType()] = repo;
+            }
+        }
+
+        // ✅ Generic repository for standard CRUD
+        public IGenericRepositoryAsync<T> Repository<T>() where T : class
+        {
+            if (!_repositories.TryGetValue(typeof(T), out var repo))
+            {
+                repo = new GenericRepositoryAsync<T>(_context);
+                _repositories[typeof(T)] = repo;
+            }
+
+            return (IGenericRepositoryAsync<T>)repo;
+        }
+
+        // ✅ Retrieve custom repositories (specialized methods)
+        public TRepository? GetCustomRepository<TRepository>() where TRepository : class
+        {
+            return _customRepositories.TryGetValue(typeof(TRepository), out var repository)
+                ? (TRepository)repository
+                : throw new InvalidOperationException($"Repository of type {typeof(TRepository).Name} is not registered.");
         }
 
 
@@ -41,8 +55,8 @@ namespace MosefakApp.Infrastructure.Unit
             {
                 throw new InvalidOperationException("A transaction is already in progress.");
             }
-            _transaction = await _context.Database.BeginTransactionAsync();
 
+            _transaction = await _context.Database.BeginTransactionAsync();
             return _transaction;
         }
 
@@ -52,9 +66,16 @@ namespace MosefakApp.Infrastructure.Unit
             {
                 throw new InvalidOperationException("No transaction in progress.");
             }
-            await _transaction.CommitAsync();
-            await _transaction.DisposeAsync();
-            _transaction = null!;
+
+            try
+            {
+                await _transaction.CommitAsync();
+            }
+            finally
+            {
+                await _transaction.DisposeAsync();
+                _transaction = null;
+            }
         }
 
         public async Task RollbackTransactionAsync()
@@ -63,9 +84,16 @@ namespace MosefakApp.Infrastructure.Unit
             {
                 throw new InvalidOperationException("No transaction in progress.");
             }
-            await _transaction.RollbackAsync();
-            await _transaction.DisposeAsync();
-            _transaction = null!;
+
+            try
+            {
+                await _transaction.RollbackAsync();
+            }
+            finally
+            {
+                await _transaction.DisposeAsync();
+                _transaction = null;
+            }
         }
 
     }

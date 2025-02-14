@@ -7,8 +7,8 @@
         public string DoctorFullName { get; set; } = null!;
         public string? DoctorImage { get; set; }
         public IList<SpecializationResponse> DoctorSpecialization { get; set; } = null!;
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
+        public DateTimeOffset StartDate { get; set; }
+        public DateTimeOffset EndDate { get; set; }
         public AppointmentTypeResponse AppointmentType { get; set; } = null!;
     }
 }

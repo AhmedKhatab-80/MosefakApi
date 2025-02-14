@@ -17,7 +17,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "9.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -27,7 +27,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<int>("Id")
                         .HasColumnType("int");
 
-                    b.Property<int>("AppUserId")
+                    b.Property<int>("PatientId")
                         .HasColumnType("int");
 
                     b.Property<int>("DoctorId")
@@ -40,8 +40,20 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<int>("AppointmentTypeId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("ApprovedByDoctor")
+                        .HasColumnType("bit");
+
                     b.Property<string>("CancellationReason")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -73,18 +85,23 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<DateTime?>("LastUpdatedTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("PaymentDueTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PaymentStatus")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ProblemDescription")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ServiceProvided")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
 
-                    b.HasKey("Id", "AppUserId", "DoctorId");
+                    b.HasKey("Id", "PatientId", "DoctorId");
 
                     b.HasIndex("AppointmentTypeId");
 
@@ -120,7 +137,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<int>("DoctorId")
                         .HasColumnType("int");
 
-                    b.Property<TimeOnly>("Duration")
+                    b.Property<TimeSpan>("Duration")
                         .HasColumnType("time");
 
                     b.Property<int?>("FirstUpdatedByUserId")
@@ -149,7 +166,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.ToTable("AppointmentTypes", (string)null);
                 });
 
-            modelBuilder.Entity("MosefakApp.Domains.Entities.ClinicAddress", b =>
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Award", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -157,8 +174,74 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("DateReceived")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FirstUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FirstUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Organization")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.ToTable("Awards");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Clinic", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApartmentOrSuite")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("City")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClinicImage")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Country")
@@ -189,11 +272,26 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Landmark")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("LastUpdatedByUserId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("LastUpdatedTime")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("LogoPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Street")
                         .IsRequired()
@@ -203,7 +301,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     b.HasIndex("DoctorId");
 
-                    b.ToTable("ClinicAddresses");
+                    b.ToTable("Clinics");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Doctor", b =>
@@ -255,12 +353,160 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<int>("NumberOfReviews")
                         .HasColumnType("int");
 
-                    b.Property<int>("YearOfExperience")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.ToTable("Doctors");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Education", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdditionalNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("CurrentlyStudying")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Degree")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("FirstUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FirstUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Major")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UniversityLogoPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UniversityName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.ToTable("Educations");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Experience", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("CurrentlyWorkingHere")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EmploymentType")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("FirstUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FirstUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HospitalLogo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HospitalName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("JobDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("LastUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoctorId");
+
+                    b.ToTable("Experiences");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Identity.AppUser", b =>
@@ -284,7 +530,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Email")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
@@ -343,6 +589,10 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("[Email] IS NOT NULL");
+
                     b.ToTable("AppUser");
                 });
 
@@ -355,10 +605,8 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("AppointmentAppUserId")
-                        .HasColumnType("int");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal");
 
                     b.Property<int>("AppointmentDoctorId")
                         .HasColumnType("int");
@@ -366,19 +614,14 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<int>("AppointmentId")
                         .HasColumnType("int");
 
-                    b.Property<string>("ClientSecret")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("AppointmentPatientId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("int");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("DeletedByUserId")
                         .HasColumnType("int");
@@ -395,7 +638,60 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsSuccessful")
+                    b.Property<int?>("LastUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StripePaymentIntentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId", "AppointmentPatientId", "AppointmentDoctorId")
+                        .IsUnique();
+
+                    b.ToTable("Payments", (string)null);
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Period", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("TIME");
+
+                    b.Property<int?>("FirstUpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FirstUpdatedTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<int?>("LastUpdatedByUserId")
@@ -404,30 +700,17 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<DateTime?>("LastUpdatedTime")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("PatientId")
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("TIME");
+
+                    b.Property<int>("WorkingTimeId")
                         .HasColumnType("int");
-
-                    b.Property<DateTime>("PaymentDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PaymentIntentId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PaymentMethod")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TransactionId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AppointmentId", "AppointmentAppUserId", "AppointmentDoctorId")
-                        .IsUnique();
+                    b.HasIndex("WorkingTimeId");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Periods", (string)null);
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Review", b =>
@@ -543,13 +826,16 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("ClinicId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("int");
 
-                    b.Property<string>("DayOfWeek")
+                    b.Property<string>("Day")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -558,12 +844,6 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
                     b.Property<DateTime?>("DeletedTime")
                         .HasColumnType("datetime2");
-
-                    b.Property<int>("DoctorId")
-                        .HasColumnType("int");
-
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("TIME");
 
                     b.Property<int?>("FirstUpdatedByUserId")
                         .HasColumnType("int");
@@ -580,12 +860,9 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Property<DateTime?>("LastUpdatedTime")
                         .HasColumnType("datetime2");
 
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("TIME");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("DoctorId");
+                    b.HasIndex("ClinicId");
 
                     b.ToTable("WorkingTimes", (string)null);
                 });
@@ -599,7 +876,7 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                         .IsRequired();
 
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("Appointments")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -620,10 +897,43 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Navigation("Doctor");
                 });
 
-            modelBuilder.Entity("MosefakApp.Domains.Entities.ClinicAddress", b =>
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Award", b =>
                 {
                     b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
-                        .WithMany("ClinicAddresses")
+                        .WithMany("Awards")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Clinic", b =>
+                {
+                    b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
+                        .WithMany("Clinics")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Education", b =>
+                {
+                    b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
+                        .WithMany("Educations")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Experience", b =>
+                {
+                    b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
+                        .WithMany("Experiences")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -642,19 +952,16 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)");
 
-                            b1.Property<int>("Id")
-                                .HasColumnType("int");
-
-                            b1.Property<string>("State")
+                            b1.Property<string>("Country")
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)");
+
+                            b1.Property<int>("Id")
+                                .HasColumnType("int");
 
                             b1.Property<string>("Street")
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)");
-
-                            b1.Property<int>("ZipCode")
-                                .HasColumnType("int");
 
                             b1.HasKey("AppUserId");
 
@@ -666,19 +973,29 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                             b1.Navigation("AppUser");
                         });
 
-                    b.Navigation("Address")
-                        .IsRequired();
+                    b.Navigation("Address");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Payment", b =>
                 {
                     b.HasOne("MosefakApp.Domains.Entities.Appointment", "Appointment")
                         .WithOne("Payment")
-                        .HasForeignKey("MosefakApp.Domains.Entities.Payment", "AppointmentId", "AppointmentAppUserId", "AppointmentDoctorId")
+                        .HasForeignKey("MosefakApp.Domains.Entities.Payment", "AppointmentId", "AppointmentPatientId", "AppointmentDoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Appointment");
+                });
+
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Period", b =>
+                {
+                    b.HasOne("MosefakApp.Domains.Entities.WorkingTime", "WorkingTime")
+                        .WithMany("Periods")
+                        .HasForeignKey("WorkingTimeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WorkingTime");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Review", b =>
@@ -701,13 +1018,13 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.WorkingTime", b =>
                 {
-                    b.HasOne("MosefakApp.Domains.Entities.Doctor", "Doctor")
+                    b.HasOne("MosefakApp.Domains.Entities.Clinic", "Clinic")
                         .WithMany("WorkingTimes")
-                        .HasForeignKey("DoctorId")
+                        .HasForeignKey("ClinicId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Doctor");
+                    b.Navigation("Clinic");
                 });
 
             modelBuilder.Entity("MosefakApp.Domains.Entities.Appointment", b =>
@@ -720,17 +1037,33 @@ namespace MosefakApp.Infrastructure.Migrations.AppDb
                     b.Navigation("Appointments");
                 });
 
+            modelBuilder.Entity("MosefakApp.Domains.Entities.Clinic", b =>
+                {
+                    b.Navigation("WorkingTimes");
+                });
+
             modelBuilder.Entity("MosefakApp.Domains.Entities.Doctor", b =>
                 {
                     b.Navigation("AppointmentTypes");
 
-                    b.Navigation("ClinicAddresses");
+                    b.Navigation("Appointments");
+
+                    b.Navigation("Awards");
+
+                    b.Navigation("Clinics");
+
+                    b.Navigation("Educations");
+
+                    b.Navigation("Experiences");
 
                     b.Navigation("Reviews");
 
                     b.Navigation("Specializations");
+                });
 
-                    b.Navigation("WorkingTimes");
+            modelBuilder.Entity("MosefakApp.Domains.Entities.WorkingTime", b =>
+                {
+                    b.Navigation("Periods");
                 });
 #pragma warning restore 612, 618
         }

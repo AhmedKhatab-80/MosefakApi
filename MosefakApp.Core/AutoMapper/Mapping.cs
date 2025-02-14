@@ -1,6 +1,4 @@
-﻿using MosefakApp.Core.Dtos.Resolvers;
-
-namespace MosefakApp.Core.AutoMapper
+﻿namespace MosefakApp.Core.AutoMapper
 {
     public class Mapping : Profile
     {
@@ -19,7 +17,6 @@ namespace MosefakApp.Core.AutoMapper
             CreateMap<DoctorRequest, Doctor>()
                 .ForMember(dest => dest.NumberOfReviews, opt => opt.MapFrom(src => 0)); // Default value for NumberOfReviews
 
-            CreateMap<ClinicAddressRequest, ClinicAddress>().ReverseMap();
             CreateMap<AppointmentTypeRequest, AppointmentType>().ReverseMap();
             CreateMap<SpecializationRequest, Specialization>().ReverseMap();
             CreateMap<WorkingTimeRequest, WorkingTime>().ReverseMap();
@@ -27,6 +24,33 @@ namespace MosefakApp.Core.AutoMapper
 
             CreateMap<CompleteDoctorProfileRequest, Doctor>()
                 .ForMember(dest => dest.NumberOfReviews, opt => opt.MapFrom(src => 0));
+
+            // Clinic
+            
+            CreateMap<ClinicRequest, Clinic>().ReverseMap();
+            CreateMap<Clinic, ClinicResponse>().ReverseMap();
+
+            // working times
+
+            CreateMap<WorkingTimeRequest, WorkingTime>().ReverseMap();
+            CreateMap<WorkingTime, WorkingTimeResponse>().ReverseMap();
+
+            // Review
+
+            CreateMap<ReviewRequest, Review>().ReverseMap();
+            CreateMap<Review, ReviewResponse>().ReverseMap();
+
+            // appointment
+
+            CreateMap<Appointment, AppointmentResponse>().ReverseMap();
+            CreateMap<Appointment, AppointmentDto>().ReverseMap();
+
+            // appointment type
+
+            CreateMap<AppointmentType, AppointmentTypeResponse>().ReverseMap();
+            CreateMap<AppointmentTypeRequest, AppointmentType>().ReverseMap();
+
+
         }
     }
 }

@@ -2,13 +2,14 @@
 {
     public enum PaymentStatus
     {
+
         [EnumMember(Value = "Pending")]
         Pending,
 
-        [EnumMember(Value = "Failed")]
-        Failed,
+        [EnumMember(Value = "Paid")]
+        Paid,
 
-        [EnumMember(Value = "Completed")]
-        Completed
+        [EnumMember(Value = "Refunded")]
+        Refunded
     }
 }

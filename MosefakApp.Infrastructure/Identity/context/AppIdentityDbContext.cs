@@ -13,6 +13,9 @@
 
             builder.ApplyConfiguration(new AppUserConfig());
 
+            builder.Entity<AppUser>().HasQueryFilter(x => !x.IsDeleted);
+            builder.Entity<AppRole>().HasQueryFilter(x => !x.IsDeleted);
+
             builder.Entity<AppUser>().ToTable(name: "Users", schema: "Security");
             builder.Entity<IdentityUserRole<int>>().ToTable(name: "UserRoles", schema: "Security");
             builder.Entity<AppRole>().ToTable(name: "Roles", schema: "Security");

@@ -34,3 +34,5 @@ global using MosefakApi.Business.Services.Cache;
 global using MosefakApp.Core.IServices.Cache;
 global using MosefakApi.Business.Services.Logging;
 global using MosefakApp.Core.IServices.Logging;
+global using MosefakApi.Business.Services.Stripe;
+global using MosefakApp.Core.IServices.Stripe;

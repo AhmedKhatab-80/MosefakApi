@@ -42,11 +42,64 @@
             return Ok(query);
         }
 
-        [HttpPut("cancel-appointment")]
-        [HasPermission(Permissions.CancelAppointment)]
-        public async Task<ActionResult<bool>> CancelAppointmentAsync(CancelAppointmentRequest request)
+        [HttpPut("{appointmentId}/approve")]
+        [HasPermission(Permissions.ApproveAppointment)]
+        public async Task<ActionResult<bool>> ApproveAppointmentByDoctor(int appointmentId)
         {
-            var query = await _appointmentsService.CancelAppointmentAsync(request.AppointmentId, request.CancelationReason);
+            var query = await _appointmentsService.ApproveAppointmentByDoctor(appointmentId);
+
+            return Ok(query);
+        }
+
+        [HttpPut("{appointmentId}/reject")]
+        [HasPermission(Permissions.RejectAppointment)]
+        public async Task<ActionResult<bool>> RejectAppointmentByDoctor(int appointmentId, RejectAppointmentRequest request)
+        {
+            var query = await _appointmentsService.RejectAppointmentByDoctor(appointmentId, request.RejectionReason);
+
+            return Ok(query);
+        }
+
+        [HttpPut("{appointmentId}/complete")]
+        [HasPermission(Permissions.MarkAppointmentAsCompleted)]
+        public async Task<ActionResult<bool>> MarkAppointmentAsCompleted(int appointmentId)
+        {
+            var query = await _appointmentsService.MarkAppointmentAsCompleted(appointmentId);
+
+            return Ok(query);
+        }
+
+        [HttpDelete("{appointmentId}/doctor-cancel")]
+        [HasPermission(Permissions.CancelAppointmentByDoctor)]
+        public async Task<ActionResult<bool>> CancelAppointmentByDoctor(int appointmentId, CancelAppointmentRequest request)
+        {
+            var query = await _appointmentsService.CancelAppointmentByDoctor(appointmentId, request.CancelationReason);
+
+            return Ok(query);
+        }
+
+        [HttpPut("{appointmentId}/patient-cancel")]
+        [HasPermission(Permissions.CancelAppointmentByPatient)]
+        public async Task<ActionResult<bool>> CancelAppointmentAsync(int appointmentId, CancelAppointmentRequest request)
+        {
+            var query = await _appointmentsService.CancelAppointmentByPatient(appointmentId, request.CancelationReason);
+
+            return Ok(query);
+        }
+
+        [HttpPost("auto-cancel")]
+        public async Task<ActionResult> AutoCancelUnpaidAppointments()
+        {
+            await _appointmentsService.AutoCancelUnpaidAppointments();
+
+            return Ok();
+        }
+
+        [HttpPost("{appointmentId}/pay")]
+        [HasPermission(Permissions.PayForAppointment)]
+        public async Task<ActionResult<bool>> Pay(int appointmentId)
+        {
+            var query = await _appointmentsService.Pay(appointmentId);
 
             return Ok(query);
         }

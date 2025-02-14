@@ -5,12 +5,16 @@
         // Shared fields (Users table), I Inherited them from UserProfileResponse to avoid duplication
 
         // Doctor-specific fields (Doctors table)
-        public int YearsOfExperience { get; set; }
-        public string? AboutMe { get; set; }
+        public string LicenseNumber { get; set; } = null!;
+        public string AboutMe { get; set; } = null!;
+        public int NumberOfReviews { get; set; }
+        public int TotalYearsOfExperience { get; set; }
         public double Rating { get; set; }
-        public List<SpecializationResponse> Specialty { get; set; } = new List<SpecializationResponse>();
-        public List<AppointmentTypeResponse> AppointmentTypes { get; set; } = new List<AppointmentTypeResponse>();
-        public List<WorkingTimeResponse> WorkingTimes { get; set; } = new List<WorkingTimeResponse>();
-        public IList<ClinicAddressResponse> ClinicAddresses { get; set; } = new List<ClinicAddressResponse>();
+
+        // 🔹 Specializations, Awards, Education, and Experiences
+        public List<SpecializationResponse> Specializations { get; set; } = new();
+        public List<AwardResponse> Awards { get; set; } = new();
+        public List<EducationResponse> Education { get; set; } = new();
+        public List<ExperienceResponse> Experiences { get; set; } = new();
     }
 }

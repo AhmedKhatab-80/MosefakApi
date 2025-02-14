@@ -6,6 +6,9 @@
         Task<IList<T>> GetAllAsync(IEnumerable<string> includes = null!);
         Task<IList<T>> GetAllAsync(Expression<Func<T,bool>> expression, IEnumerable<string> includes = null!);
         Task<T> GetByIdAsync(object id);
+        Task<double> GetAverage(Expression<Func<T,double>> expression, Expression<Func<T,bool>> criteria);
+        Task<double> GetAverage(Expression<Func<T,double>> expression);
+        Task<bool> AnyAsync(Expression<Func<T, bool>>? predicate = null);
         Task<T> FirstOrDefaultASync(Expression<Func<T, bool>> predicate, string[] includes = null!);
         Task<long> GetCountAsync();
         Task<long> GetCountWithConditionAsync(Expression<Func<T, bool>> condition);

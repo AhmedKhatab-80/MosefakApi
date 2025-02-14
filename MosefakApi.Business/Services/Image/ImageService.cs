@@ -1,4 +1,6 @@
-﻿namespace MosefakApi.Business.Services.Image
+﻿using File = System.IO.File;
+
+namespace MosefakApi.Business.Services.Image
 {
     public class ImageService : IImageService
     {

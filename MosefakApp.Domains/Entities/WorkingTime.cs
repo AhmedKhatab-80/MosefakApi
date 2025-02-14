@@ -2,10 +2,12 @@
 {
     public class WorkingTime : BaseEntity // that represent Schedule
     {
-        public int DoctorId { get; set; } 
-        public Doctor Doctor { get; set; } = null!;
-        public DayOfWeek DayOfWeek { get; set; }
-        public TimeOnly StartTime { get; set; } // 08:00
-        public TimeOnly EndTime { get; set; }   // 23:00
+        public DayOfWeek Day { get; set; } 
+        public ICollection<Period> Periods { get; set; } = new HashSet<Period>();
+        public int ClinicId { get; set; }       
+        public Clinic Clinic { get; set; } = null!;    
+
+        [NotMapped]
+        public bool IsAvailable => Periods.Any(p => p.IsAvailable);
     }
 }

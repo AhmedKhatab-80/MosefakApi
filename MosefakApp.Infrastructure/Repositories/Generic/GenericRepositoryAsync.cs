@@ -39,6 +39,12 @@
             });
         }
 
+        public async Task<bool> AnyAsync(Expression<Func<T, bool>>? predicate = null)
+        {
+            return predicate == null
+            ? await _entity.AnyAsync()
+                : await _entity.AnyAsync(predicate);
+        }
         public async Task<T> FirstOrDefaultASync(Expression<Func<T, bool>> predicate, string[] includes = null!)
         {
             IQueryable<T> query = _entity.AsQueryable();
@@ -113,5 +119,16 @@
                 _entity.UpdateRange(entities);
             });
         }
+
+        public async Task<double> GetAverage(Expression<Func<T, double>> expression, Expression<Func<T, bool>> criteria)
+        {
+            return await _entity.Where(criteria).AverageAsync(expression);
+        }
+
+        public async Task<double> GetAverage(Expression<Func<T, double>> expression)
+        {
+            return await _entity.AverageAsync(expression);
+        }
+
     }
 }

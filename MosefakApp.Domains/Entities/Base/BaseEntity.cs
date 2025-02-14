@@ -1,6 +1,6 @@
 ﻿namespace MosefakApp.Domains.Entities.Base
 {
-    public class BaseEntity : IEntityCreationTime, IEntityCreatedByUser, IEntityModificationHistory, ISoftDeletable
+    public abstract class BaseEntity : IAuditableEntity, ISoftDeletable
     {
         public int Id { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -12,5 +12,11 @@
         public bool IsDeleted { get; set; } = false;
         public DateTime? DeletedTime { get; set; }
         public int? DeletedByUserId { get; set; }
+        public void MarkAsDeleted(int userId)
+        {
+            IsDeleted = true;
+            DeletedByUserId = userId;
+            DeletedTime = DateTime.UtcNow;
+        }
     }
 }

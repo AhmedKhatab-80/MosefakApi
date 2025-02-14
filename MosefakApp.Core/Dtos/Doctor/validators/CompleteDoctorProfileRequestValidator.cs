@@ -4,9 +4,6 @@
     {
         public CompleteDoctorProfileRequestValidator()
         {
-            RuleFor(x => x.YearOfExperience)
-           .GreaterThanOrEqualTo(0)
-           .WithMessage("Year Of Experience must be greater than or equal to 0.");
 
             Include(new RequiredStringValidator<CompleteDoctorProfileRequest>(x => x.LicenseNumber, "LicenseNumber"));
 
@@ -15,23 +12,17 @@
                 .WithMessage("About Me is required.")
                 .MaximumLength(500).WithMessage("About Me cannot exceed 500 characters.");
 
-            RuleFor(x => x.ClinicAddresses)
+            RuleFor(x => x.Clinics)
                 .NotNull()
-                .WithMessage("Clinic Addresses cannot be null.")
-                .Must(clinicAddresses => clinicAddresses.Count > 0)
-                .WithMessage("At least one ClinicAddress is required.");
+                .WithMessage("Clinics cannot be null.")
+                .Must(clinics => clinics.Count > 0)
+                .WithMessage("At least one Clinic is required.");
 
             RuleFor(x => x.Specializations)
                 .NotNull()
                 .WithMessage("Specializations cannot be null.")
                 .Must(specializations => specializations.Count > 0)
                 .WithMessage("At least one Specialization is required.");
-
-            RuleFor(x => x.WorkingTimes)
-                .NotNull()
-                .WithMessage("WorkingTimes cannot be null.")
-                .Must(workingTimes => workingTimes.Count > 0)
-                .WithMessage("At least one WorkingTime is required.");
 
             RuleFor(x => x.AppointmentTypes)
                 .NotNull()

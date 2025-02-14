@@ -20,7 +20,7 @@
 
             // Register IUnit Of work 
 
-            services.AddScoped(typeof(IUnitOfWork<>), typeof(UnitOfWork<>));
+            services.AddScoped(typeof(IUnitOfWork), typeof(UnitOfWork));
             services.AddScoped(typeof(IUserRepository), typeof(UserRepository));
 
 
@@ -97,6 +97,8 @@
             services.AddScoped<IIdProtectorService, IdProtectorService>();
             services.AddSingleton<ICacheService, CacheService>();
             services.AddSingleton<ILoggerService, LoggerService>();
+            services.AddSingleton<IStripeService, StripeService>();
+            services.AddSingleton<IAppointmentTypeService, AppointmentTypeService>();
 
             return services;
         }

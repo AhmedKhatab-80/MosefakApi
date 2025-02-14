@@ -2,14 +2,18 @@
 {
     public class AppDbContext : DbContext
     {
-        public DbSet<Doctor> Doctors { get; set; }
-        public DbSet<WorkingTime> WorkingTimes { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
         public DbSet<AppointmentType> AppointmentTypes { get; set; }
-        public DbSet<Review> Reviews { get; set; }
-        public DbSet<ClinicAddress> ClinicAddresses { get; set; }
-        public DbSet<Specialization> Specializations { get; set; }
+        public DbSet<Award> Awards { get; set; }
+        public DbSet<Clinic> Clinics { get; set; }
+        public DbSet<Doctor> Doctors { get; set; }
+        public DbSet<Education> Educations { get; set; }
+        public DbSet<Experience> Experiences { get; set; }
         public DbSet<Payment> Payments { get; set; }
+        public DbSet<Period> Periods { get; set; }
+        public DbSet<Review> Reviews { get; set; }
+        public DbSet<Specialization> Specializations { get; set; }
+        public DbSet<WorkingTime> WorkingTimes { get; set; }
 
         private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -23,6 +27,8 @@
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Ignore<BaseEntity>();
+
+         //   modelBuilder.Entity<BaseEntity>().HasQueryFilter(x => !x.IsDeleted);
 
             var cascadeFKs = modelBuilder.Model.GetEntityTypes()
                                                .SelectMany(t => t.GetForeignKeys())
@@ -63,24 +69,25 @@
                     }
                     else if (entryEntity.State == EntityState.Modified)
                     {
-                        if (entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue is null &&
+                        if (entryEntity.Properties.Any(p => p.IsModified)) //  Only update if properties are modified
+                        {
+                            if (entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue is null &&
                             entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue is null)
-                        {
-                            entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue = CurrentUserId.Value;
-                            entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue = DateTime.UtcNow;
-                        }
-                        else
-                        {
-                            entryEntity.Property(x => x.LastUpdatedByUserId).CurrentValue = CurrentUserId.Value;
-                            entryEntity.Property(x => x.LastUpdatedTime).CurrentValue = DateTime.UtcNow;
+                            {
+                                entryEntity.Property(x => x.FirstUpdatedByUserId).CurrentValue = CurrentUserId.Value;
+                                entryEntity.Property(x => x.FirstUpdatedTime).CurrentValue = DateTime.UtcNow;
+                            }
+                            else
+                            {
+                                entryEntity.Property(x => x.LastUpdatedByUserId).CurrentValue = CurrentUserId.Value;
+                                entryEntity.Property(x => x.LastUpdatedTime).CurrentValue = DateTime.UtcNow;
+                            }
                         }
                     }
                     else if (entryEntity.State == EntityState.Deleted && entryEntity.Entity is ISoftDeletable)
                     {
                         entryEntity.State = EntityState.Modified;
-                        entryEntity.Property(x => x.DeletedTime).CurrentValue = DateTime.Now;
-                        entryEntity.Property(x => x.IsDeleted).CurrentValue = true;
-                        entryEntity.Property(x => x.DeletedByUserId).CurrentValue = CurrentUserId.Value;
+                        entryEntity.Entity.MarkAsDeleted(CurrentUserId.Value);
 
                         // ✅ Check if a Review is being deleted, then decrement the Doctor's NumberOfReviews
                         if (entryEntity.Entity is Review review)

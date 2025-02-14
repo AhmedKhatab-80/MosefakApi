@@ -16,9 +16,9 @@
                 .WithMessage("Duration must be a positive value.");
         }
 
-        private bool BePositiveTime(TimeOnly duration)
+        private bool BePositiveTime(TimeSpan duration)
         {
-            return duration > TimeOnly.MinValue;
+            return duration > TimeSpan.MinValue;
         }
     }
 }

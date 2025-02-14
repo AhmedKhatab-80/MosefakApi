@@ -1,11 +1,9 @@
 ﻿namespace MosefakApp.Core.IUnit
 {
-    public interface IUnitOfWork<T> : IAsyncDisposable where T : class
+    public interface IUnitOfWork : IAsyncDisposable 
     {
-        IGenericRepositoryAsync<T> RepositoryAsync { get; }
-        IDoctorRepositoryAsync DoctorRepositoryAsync { get; }
-        IPatientRepositoryAsync PatientRepositoryAsync { get; }
-        IAppointmentRepositoryAsync AppointmentRepositoryAsync { get; }
+        IGenericRepositoryAsync<T> Repository<T>() where T : class;
+        TRepository GetCustomRepository<TRepository>() where TRepository : class;
         Task<int> CommitAsync();
         Task<IDbContextTransaction> BeginTransactionAsync();
         Task CommitTransactionAsync();

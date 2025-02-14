@@ -21,11 +21,11 @@
                 .WithMessage("About Me is required.")
                 .MaximumLength(500).WithMessage("About Me cannot exceed 500 characters.");
 
-            RuleFor(x => x.ClinicAddresses)
+            RuleFor(x => x.Clinics)
                 .NotNull()
-                .WithMessage("ClinicAddresses cannot be null.")
-                .Must(clinicAddresses => clinicAddresses.Count > 0)
-                .WithMessage("At least one ClinicAddress is required.");
+                .WithMessage("Clinics cannot be null.")
+                .Must(clinics => clinics.Count > 0)
+                .WithMessage("At least one Clinic is required.");
 
             RuleFor(x => x.Specializations)
                 .NotNull()

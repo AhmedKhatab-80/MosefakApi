@@ -1,4 +1,5 @@
-﻿namespace MosefakApp.Infrastructure.Repositories.Non_Generic
+﻿
+namespace MosefakApp.Infrastructure.Repositories.Non_Generic
 {
     public class UserRepository : IUserRepository
     {
@@ -24,6 +25,11 @@
         public async Task<int> Save()
         {
            return await _context.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<AppUser>> GetAllUsersAsync(Expression<Func<AppUser, bool>> expression)
+        {
+            return await _context.Users.Where(expression).ToListAsync();
         }
     }
 }
