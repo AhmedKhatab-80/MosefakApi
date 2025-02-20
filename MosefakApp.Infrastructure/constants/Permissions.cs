@@ -23,7 +23,6 @@
         public const string ViewDoctorProfile = "Permissions.Doctors.ViewDoctorProfile";
         public const string ViewTopTenDoctors = "Permissions.Doctors.ViewTopTenDoctors";
         public const string ViewAvailableTimeSlots = "Permissions.Doctors.ViewAvailableTimeSlots";
-        public const string ViewAppointmentTypes = "Permissions.Doctors.ViewAppointmentTypes";
         public const string ViewUpcomingAppointmentsForDoctor = "Permissions.Doctors.ViewUpcomingAppointmentsForDoctor";
         public const string ViewPastAppointmentsForDoctor = "Permissions.Doctors.ViewPastAppointmentsForDoctor";
         public const string GetTotalAppointmentsAsync = "Permissions.Doctors.GetTotalAppointmentsAsync";
@@ -33,6 +32,11 @@
         public const string EditDoctor = "Permissions.Doctors.Edit";
         public const string EditDoctorProfile = "Permissions.Doctors.EditDoctorProfile";
         public const string DeleteDoctor = "Permissions.Doctors.Delete";
+
+        public const string ViewAppointmentTypes = "Permissions.Doctors.ViewAppointmentTypes";
+        public const string AddAppointmentTypes = "Permissions.Doctors.AddAppointmentTypes";
+        public const string EditAppointmentTypes = "Permissions.Doctors.EditAppointmentTypes";
+        public const string DeleteAppointmentTypes = "Permissions.Doctors.DeleteAppointmentTypes";
 
         public const string ViewUpcomingAppointments = "Permissions.Appointments.ViewUpcomingAppointments";
         public const string ViewCanceledAppointments = "Permissions.Appointments.ViewCanceledAppointments";

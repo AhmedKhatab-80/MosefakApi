@@ -2,6 +2,6 @@
 {
     public interface IEntityCreationTime
     {
-        DateTime CreatedAt { get; set; }
+        DateTimeOffset CreatedAt { get; set; }
     }
 }

@@ -3,7 +3,7 @@
     public class BookAppointmentRequest
     {
         public int DoctorId { get; set; }
-        public DateTimeOffset StartDate { get; set; }
+        public DateTimeOffset StartDate { get; set; } 
         public string? ProblemDescription { get; set; }
         public int AppointmentTypeId { get; set; }
     }

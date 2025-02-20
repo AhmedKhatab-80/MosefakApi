@@ -11,7 +11,7 @@
 
         // 🔹 Doctor Settings 
         Task<bool> UpdateWorkingTimesAsync(int doctorId, int clinicId, IEnumerable<WorkingTimeRequest> workingTimes); // FromUserClaims
-        Task<List<TimeSlot>> GetAvailableTimeSlots(int doctorId, int clinicId, int appointmentTypeId, DayOfWeek selectedDay);  // FromUserClaims
+        Task<List<TimeSlot>> GetAvailableTimeSlots(int doctorId, int clinicId, int appointmentTypeId, DayOfWeek selectedDay);  
 
         // 🔹 Search & Ranking & Recommendations
         Task<DoctorDetail> GetDoctorById(int doctorId); // Pass doctorId explicitly not claims

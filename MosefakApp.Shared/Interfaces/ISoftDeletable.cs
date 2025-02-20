@@ -3,7 +3,7 @@
     public interface ISoftDeletable
     {
         bool IsDeleted { get; set; } 
-        DateTime? DeletedTime { get; set; }
+        DateTimeOffset? DeletedTime { get; set; }
         int? DeletedByUserId { get; set; }
     }
 }

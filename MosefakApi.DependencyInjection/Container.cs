@@ -9,7 +9,9 @@
 
             services.RegisterConnectionString(configuration);
 
-            // Register Redis
+            // Register HanjFire
+
+            services.RegisterHanjFire(configuration);
 
           //  services.RegisterRedisConfig(configuration);
 
@@ -55,6 +57,14 @@
             return services;
         }
 
+        private static IServiceCollection RegisterHanjFire(this IServiceCollection services, IConfiguration configuration)
+        {
+
+            var connection = configuration["ConnectionStrings:DefaultConnectionString"];
+            services.AddHangfire(x => x.UseSqlServerStorage(connection));
+
+            return services;
+        }
 
         //private static IServiceCollection RegisterRedisConfig(this IServiceCollection services, IConfiguration configuration)
         //{

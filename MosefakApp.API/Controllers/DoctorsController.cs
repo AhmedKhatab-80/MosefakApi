@@ -1,5 +1,4 @@
-﻿using MosefakApp.Core.Dtos.Period.Responses;
-using MosefakApp.Core.Dtos.Schedule.Requests;
+﻿using MosefakApp.Core.Dtos.Specialization.Requests;
 
 namespace MosefakApp.API.Controllers
 {
@@ -111,6 +110,30 @@ namespace MosefakApp.API.Controllers
             return Ok(query);
         }
 
+        [HttpPost("add-specialization")]
+        public async Task<ActionResult<bool>> AddSpecializationAsync(SpecializationRequest request)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddSpecializationAsync(doctorId,request);
+
+            return Ok(query);
+        }
+
+        [HttpDelete("remove-specialization/{specializationId}")]
+        public async Task<ActionResult<bool>> RemoveSpecializationAsync(string specializationId)
+        {
+            var unpotectedSpecializationId = UnprotectId(specializationId);
+
+            if (unpotectedSpecializationId == null)
+                throw new BadRequest("invalid specialization id");
+
+            var doctorId = User.GetUserId();
+            
+            var query = await _doctorService.RemoveSpecializationAsync(doctorId, unpotectedSpecializationId.Value);
+
+            return Ok(query);
+        }
+
         [HttpPost("upload-image")]
         [HasPermission(Permissions.UploadDoctorProfileImage)]
         public async Task<ActionResult<bool>> UploadProfileImageAsync(IFormFile imageFile, CancellationToken cancellationToken = default)
@@ -121,6 +144,22 @@ namespace MosefakApp.API.Controllers
 
             return Ok(query);
         }
+
+        [HttpPut("edit-specialization")]
+        public async Task<ActionResult<bool>> EditSpecializationAsync([FromQuery] string specializationId, SpecializationRequest request)
+        {
+            var unpotectedSpecializationId = UnprotectId(specializationId);
+
+            if (unpotectedSpecializationId == null)
+                throw new BadRequest("invalid specialization id");
+
+            var doctorId = User.GetUserId();
+
+            var query = await _doctorService.EditSpecializationAsync(doctorId, unpotectedSpecializationId.Value,request);
+
+            return Ok(query);
+        }
+
         // ✅ Add a new doctor (For Admin)
         [HttpPost]
         [HasPermission(Permissions.CreateDoctor)]
@@ -176,12 +215,18 @@ namespace MosefakApp.API.Controllers
         // ✅ Get available time slots for a doctor
         [HttpGet("{doctorId}/available-time-slots")]
         [HasPermission(Permissions.ViewAvailableTimeSlots)]
-        public async Task<ActionResult<List<TimeSlot>>> GetAvailableTimeSlots(string doctorId,[FromQuery] int clinicId,[FromQuery] int appointmentTypeId,[FromQuery] DayOfWeek selectedDay)
+        public async Task<ActionResult<List<TimeSlot>>> GetAvailableTimeSlots(string doctorId,[FromQuery] string clinicId,[FromQuery] string appointmentTypeId,[FromQuery] DayOfWeek selectedDay)
         {
             var unprotectedId = UnprotectId(doctorId);
             if (unprotectedId == null) return BadRequest("Invalid doctor ID");
 
-            var availableSlots = await _doctorService.GetAvailableTimeSlots(unprotectedId.Value, clinicId, appointmentTypeId, selectedDay);
+            var unprotectedclinicId = UnprotectId(clinicId);
+            if (unprotectedclinicId == null) return BadRequest("Invalid clinic ID");
+
+            var unprotectedAppointmentTypeId = UnprotectId(appointmentTypeId);
+            if (unprotectedAppointmentTypeId == null) return BadRequest("Invalid Appointment Type Id");
+
+            var availableSlots = await _doctorService.GetAvailableTimeSlots(unprotectedId.Value, unprotectedclinicId.Value, unprotectedAppointmentTypeId.Value, selectedDay);
             return Ok(availableSlots);
         }
 

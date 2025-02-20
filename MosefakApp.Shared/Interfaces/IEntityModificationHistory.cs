@@ -2,8 +2,8 @@
 {
     public interface IEntityModificationHistory
     {
-        DateTime? FirstUpdatedTime { get; set; }
-        DateTime? LastUpdatedTime { get; set; }
+        DateTimeOffset? FirstUpdatedTime { get; set; }
+        DateTimeOffset? LastUpdatedTime { get; set; }
         int? FirstUpdatedByUserId { get; set; }
         int? LastUpdatedByUserId { get; set; }
     }

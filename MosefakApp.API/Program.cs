@@ -1,4 +1,7 @@
-﻿var builder = WebApplication.CreateBuilder(args);
+﻿using Hangfire;
+using MosefakApi.Business.Services;
+
+var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
@@ -48,6 +51,21 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Run recurring job
+using (var scope = app.Services.CreateScope())
+{
+    var appointmentService = scope.ServiceProvider.GetRequiredService<AppointmentService>();
+
+    string recurringJobId = "activateEmployeesJob";
+    // Using service-based API for recurring job
+    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate(
+        recurringJobId,
+        () => appointmentService.AutoCancelUnpaidAppointments(),
+        Cron.Daily
+    );
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

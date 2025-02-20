@@ -7,8 +7,10 @@
         private readonly ICacheService _cacheService;
         private readonly ILoggerService _loggerService;
         private readonly IMapper _mapper;
+        private const string CacheKey_PatientProfile = "/api/Patients/profile"; // Centralized cache key
 
-        public PatientService(UserManager<AppUser> userManager, IImageService imageService, ICacheService cacheService, ILoggerService loggerService, IMapper mapper)
+        public PatientService(UserManager<AppUser> userManager, IImageService imageService,
+                              ICacheService cacheService, ILoggerService loggerService, IMapper mapper)
         {
             _userManager = userManager;
             _imageService = imageService;
@@ -19,89 +21,113 @@
 
         public async Task<UserProfileResponse?> PatientProfile(int userIdFromClaims)
         {
-            var user = await _userManager.Users.Include(x=> x.Address)
-                                               .Where(x => x.Id == userIdFromClaims)
-                                               .FirstOrDefaultAsync();
+            var user = await _userManager.Users
+                                         .AsNoTracking() // Optimization for read-only operation
+                                         .Include(x => x.Address)
+                                         .FirstOrDefaultAsync(x => x.Id == userIdFromClaims);
 
             if (user is null)
+            {
+                _loggerService.LogWarning($"Patient profile not found for ID: {userIdFromClaims}");
                 return null;
+            }
 
-            var userProfile = _mapper.Map<UserProfileResponse>(user);
-
-            return userProfile;
+            return _mapper.Map<UserProfileResponse>(user);
         }
 
-        public async Task<UserProfileResponse> UpdatePatientProfile(int userIdFromClaims, UpdatePatientProfileRequest request, CancellationToken cancellationToken = default)
+        public async Task<UserProfileResponse> UpdatePatientProfile(int userIdFromClaims,
+                                                                    UpdatePatientProfileRequest request,
+                                                                    CancellationToken cancellationToken = default)
         {
-            var user = await _userManager.FindByIdAsync(userIdFromClaims.ToString());
+            var user = await CheckPatientExist(userIdFromClaims);
 
-            if (user is null)
-            {
-                _loggerService.LogWarning($"user is not exist with #ID: ", userIdFromClaims);
-                throw new ItemNotFound("user is not exist");
-            }
-
-            var oldImagePath = user.ImagePath ?? string.Empty;
-            string newImagePath = null;
-
-            if (request.ImagePath is not null)
-            {
-                try
-                {
-                    newImagePath = await _imageService.UploadImageOnServer(
-                        "Patient",
-                        request.ImagePath,
-                        deleteIfExist: false,
-                        oldPath: oldImagePath,
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException("Failed to upload image.", ex);
-                }
-            }
-
-            user.FirstName = request.FirstName;
-            user.LastName = request.LastName;
+            // Update user properties only if they have changed
+            user.FirstName = request.FirstName ?? user.FirstName;
+            user.LastName = request.LastName ?? user.LastName;
             user.PhoneNumber = request.PhoneNumber ?? user.PhoneNumber;
             user.DateOfBirth = request.DateOfBirth ?? user.DateOfBirth;
             user.Gender = request.Gender ?? user.Gender;
-            user.ImagePath = newImagePath ?? oldImagePath;
 
             if (request.Address != null)
             {
-                user.Address ??= new Address();
+                user.Address ??= new Address(); // Ensure address object exists
                 user.Address.Country = request.Address.Country;
                 user.Address.City = request.Address.City;
                 user.Address.Street = request.Address.Street;
             }
-                
+
             var result = await _userManager.UpdateAsync(user);
 
             if (!result.Succeeded)
             {
-                // Clean up the newly uploaded image if the update fails
-                if (newImagePath != null)
-                    await _imageService.RemoveImage($"Patient/{newImagePath}");
-
-                // Return all validation errors
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                throw new BadRequest($"Failed to update profile because {string.Join(',', errors)}" );
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                _loggerService.LogError($"Failed to update profile for ID {userIdFromClaims}: {errors}");
+                throw new BadRequest($"Profile update failed: {errors}");
             }
 
-            // Clean up the old image if a new one was uploaded
-            if (newImagePath != null && !string.IsNullOrEmpty(oldImagePath))
-                await _imageService.RemoveImage($"Patient/{oldImagePath}");
+            // Invalidate cache since profile has changed
+            await _cacheService.RemoveCachedResponseAsync(CacheKey_PatientProfile);
 
-            // Map and return the response
-            var response = _mapper.Map<UserProfileResponse>(user);
+            return _mapper.Map<UserProfileResponse>(user);
+        }
 
-            if (response == null)
-                throw new InvalidOperationException("Failed to map user profile.");
+        public async Task<bool> UploadProfileImageAsync(int patientId, IFormFile imageFile, CancellationToken cancellationToken = default)
+        {
+            var patient = await CheckPatientExist(patientId);
 
-            await _cacheService.RemoveCachedResponseAsync("/api/Paitents/profile");
+            string oldPath = patient.ImagePath ?? string.Empty;
+            string? newPath = null;
 
-            return response;
+            try
+            {
+                if (imageFile != null)
+                {
+                    newPath = await _imageService.UploadImageOnServer("User", imageFile, false, oldPath, cancellationToken);
+                    patient.ImagePath = newPath;
+                }
+
+                var result = await _userManager.UpdateAsync(patient);
+
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    _loggerService.LogError($"Failed to update profile image for ID {patientId}: {errors}");
+
+                    // Rollback: remove newly uploaded image if user update fails
+                    if (!string.IsNullOrEmpty(newPath))
+                        await _imageService.RemoveImage($"User/{newPath}");
+
+                    throw new BadRequest($"Profile image update failed: {errors}");
+                }
+
+                // If image update successful, remove the old image safely
+                if (!string.IsNullOrEmpty(oldPath))
+                    await _imageService.RemoveImage($"User/{oldPath}");
+
+                // Invalidate profile cache since image changed
+                await _cacheService.RemoveCachedResponseAsync(CacheKey_PatientProfile);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _loggerService.LogError($"Unexpected error in UploadProfileImageAsync for ID {patientId}: {ex.Message}");
+                throw new Exception("An unexpected error occurred while updating profile image.", ex);
+            }
+        }
+
+        private async Task<AppUser> CheckPatientExist(int patientId)
+        {
+            var user = await _userManager.FindByIdAsync(patientId.ToString());
+
+            if (user is null)
+            {
+                _loggerService.LogWarning($"Patient not found for ID {patientId}");
+                throw new ItemNotFound("User does not exist.");
+            }
+
+            return user;
         }
     }
+
 }

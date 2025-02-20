@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
-
-namespace MosefakApi.Business.Services
+﻿namespace MosefakApi.Business.Services
 {
     public class DoctorService : IDoctorService
     {

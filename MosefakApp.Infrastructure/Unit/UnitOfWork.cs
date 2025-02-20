@@ -40,7 +40,7 @@
         }
 
 
-        public async Task<int> CommitAsync()
+        public async Task<int> CommitAsync(CancellationToken cancellationToken = default)
         {
             return await _context.SaveChangesAsync();
         }

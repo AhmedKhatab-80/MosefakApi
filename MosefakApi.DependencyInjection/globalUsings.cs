@@ -1,4 +1,5 @@
-﻿global using Microsoft.AspNetCore.Builder;
+﻿global using Hangfire;
+global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.Http;
 global using Microsoft.AspNetCore.Identity.UI.Services;
 global using Microsoft.AspNetCore.RateLimiting;

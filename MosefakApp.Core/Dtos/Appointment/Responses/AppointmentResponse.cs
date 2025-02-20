@@ -3,6 +3,7 @@
     public class AppointmentResponse 
     {
         public int Id { get; set; }
+        public AppointmentStatus AppointmentStatus { get; set; }
         public int DoctorId { get; set; }
         public string DoctorFullName { get; set; } = null!;
         public string? DoctorImage { get; set; }

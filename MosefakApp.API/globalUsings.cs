@@ -2,6 +2,7 @@
 global using MosefakApi.DependencyInjection;
 global using MosefakApp.API.Extensions;
 global using MosefakApp.API.Filters.Authentication;
+global using MosefakApp.Core.Dtos.AppointmentType.Requests;
 global using System.Text.Json.Serialization;
 global using Microsoft.AspNetCore.Mvc;
 global using MosefakApp.Core.Dtos.User.Requests;
@@ -49,6 +50,8 @@ global using MosefakApp.Core.IServices.Data_Protection;
 global using Microsoft.AspNetCore.RateLimiting;
 global using MosefakApp.Core.Abstractions;
 global using Serilog;
+global using MosefakApp.Core.Dtos.Period.Responses;
+global using MosefakApp.Core.Dtos.Schedule.Requests;
 
 
 
