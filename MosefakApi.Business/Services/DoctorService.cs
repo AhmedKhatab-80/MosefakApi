@@ -1384,19 +1384,19 @@
         }
 
 
-        public async Task<IEnumerable<ClinicResponse>> GetDoctorClinicsAsync(int doctorId)
+        public async Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId)
         {
             var clinics = await _unitOfWork.Repository<Clinic>()
                                            .GetAllAsync(c => c.Doctor.AppUserId == doctorId, ["WorkingTimes", "WorkingTimes.Periods","Doctor"]);
 
-            return clinics?.Any() == true ? _mapper.Map<IEnumerable<ClinicResponse>>(clinics) : Enumerable.Empty<ClinicResponse>();
+            return (List<ClinicResponse>)(clinics?.Any() == true ? _mapper.Map<List<ClinicResponse>>(clinics) : Enumerable.Empty<ClinicResponse>());
         }
 
-        public async Task<IEnumerable<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId)
+        public async Task<List<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId)
         {
             var reviews = await _unitOfWork.Repository<Review>().GetAllAsync(r => r.DoctorId == doctorId);
 
-            return reviews?.Any() == true ? _mapper.Map<IEnumerable<ReviewResponse>>(reviews) : Enumerable.Empty<ReviewResponse>();
+            return (List<ReviewResponse>)(reviews?.Any() == true ? _mapper.Map<List<ReviewResponse>>(reviews) : Enumerable.Empty<ReviewResponse>());
         }
 
         public async Task<double> GetAverageRatingAsync(int doctorId)
@@ -1558,7 +1558,7 @@
                 .ToList(),
                 Clinics = doctor.Clinics.Select(x => new ClinicResponse
                 {
-                    Id = x.Id,
+                    Id = x.Id.ToString(),
                     City = x.City,
                     Country = x.Country,
                     Street = x.Street,
@@ -1603,7 +1603,7 @@
 
                     return new ReviewResponse
                     {
-                        Id = review.Id,
+                        Id = review.Id.ToString(),
                         FullName = reviewerFullName,
                         ImagePath = reviewerImagePath,
                         Comment = review.Comment,

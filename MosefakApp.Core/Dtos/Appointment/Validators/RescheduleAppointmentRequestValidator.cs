@@ -4,9 +4,11 @@
     {
         public RescheduleAppointmentRequestValidator()
         {
-            RuleFor(x => x.AppointmentId).GreaterThan(0).WithMessage("appointment must greater than 0!");
 
-            RuleFor(x => x.NewDateTime).GreaterThan(DateTime.UtcNow).WithMessage("New DateTime must be in the future.");
+            Include(new RequiredStringValidator<RescheduleAppointmentRequest>(x => x.AppointmentId, "AppointmentId"));
+
+
+            RuleFor(x => x.selectedDate).GreaterThan(DateTime.UtcNow).WithMessage("Selected Date must be in the future.");
         }
     }
 }

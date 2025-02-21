@@ -108,7 +108,7 @@
             services.AddSingleton<ICacheService, CacheService>();
             services.AddSingleton<ILoggerService, LoggerService>();
             services.AddSingleton<IStripeService, StripeService>();
-            services.AddSingleton<IAppointmentTypeService, AppointmentTypeService>();
+            services.AddScoped<IAppointmentTypeService, AppointmentTypeService>();
 
             return services;
         }

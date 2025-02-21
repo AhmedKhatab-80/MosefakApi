@@ -77,7 +77,7 @@
             return NoContent();
         }
 
-        [HttpPut("{roleId}")]
+        [HttpPut("assign-permission/{roleId}")]
         [HasPermission(Permissions.AssignPermissionToRole)]
         public async Task<ActionResult<bool>> AssignPermissionToRoleAsync(string roleId, AssignPermissionsRequest request)
         {

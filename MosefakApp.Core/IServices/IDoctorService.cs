@@ -48,11 +48,11 @@
         Task<bool> AddClinicAsync(int doctorId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditClinicAsync(int doctorId, int clinicId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> RemoveClinicAsync(int doctorId, int clinicId); // FromUserClaims
-        Task<IEnumerable<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); // FromUserClaims
+        Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); // FromUserClaims
 
 
         // 🔹 Doctor Reviews
-        Task<IEnumerable<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId); // Pass doctorId explicitly not claims
+        Task<List<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId); // Pass doctorId explicitly not claims
         Task<double> GetAverageRatingAsync(int doctorId); // Pass doctorId explicitly not claims
 
         // 🔹 Doctor Analytics & Statistics

@@ -258,7 +258,7 @@
                     throw new ItemNotFound("Doctor does not exist.");
 
                 // 2️⃣ Retrieve the specified appointment type.
-                var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id == request.AppointmentTypeId);
+                var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id.ToString() == request.AppointmentTypeId);
                 if (appointmentType == null)
                     throw new ItemNotFound("This appointment type does not exist for this doctor.");
 
@@ -276,7 +276,7 @@
                     PatientId = appUserIdFromClaims,
                     DoctorId = request.DoctorId,
                     AppointmentStatus = AppointmentStatus.PendingApproval,
-                    AppointmentTypeId = request.AppointmentTypeId,
+                    AppointmentTypeId = int.Parse(request.AppointmentTypeId),
                     PaymentStatus = PaymentStatus.Pending,
                     StartDate = request.StartDate,
                     EndDate = endTime,
@@ -703,7 +703,7 @@
 
             return new AppointmentResponse
             {
-                Id = appointment.Id,
+                Id = appointment.Id.ToString(),
                 StartDate = appointment.StartDate,
                 EndDate = appointment.EndDate,
                 AppointmentStatus = appointment.AppointmentStatus,

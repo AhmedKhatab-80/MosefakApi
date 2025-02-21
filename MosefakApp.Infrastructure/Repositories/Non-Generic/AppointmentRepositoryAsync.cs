@@ -18,7 +18,7 @@
                                                    .Select(x =>
                                                                 new AppointmentResponse
                                                                 {
-                                                                    Id = x.Id,
+                                                                    Id = x.Id.ToString(),
                                                                     DoctorId = x.Doctor.AppUserId,
                                                                     StartDate = x.StartDate,
                                                                     EndDate = x.EndDate,

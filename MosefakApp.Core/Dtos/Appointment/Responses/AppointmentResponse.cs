@@ -2,7 +2,7 @@
 {
     public class AppointmentResponse 
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public AppointmentStatus AppointmentStatus { get; set; }
         public int DoctorId { get; set; }
         public string DoctorFullName { get; set; } = null!;

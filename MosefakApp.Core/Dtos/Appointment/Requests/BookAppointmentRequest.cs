@@ -5,7 +5,7 @@
         public int DoctorId { get; set; }
         public DateTimeOffset StartDate { get; set; } 
         public string? ProblemDescription { get; set; }
-        public int AppointmentTypeId { get; set; }
+        public string AppointmentTypeId { get; set; } = null!;
     }
 }
 

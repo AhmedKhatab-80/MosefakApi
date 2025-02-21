@@ -2,7 +2,7 @@
 {
     public class ReviewResponse
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public int Rate { get; set; }
         public string? Comment { get; set; }
         public string FullName { get; set; } = null!;

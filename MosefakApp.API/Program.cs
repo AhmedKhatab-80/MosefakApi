@@ -1,5 +1,5 @@
 ﻿using Hangfire;
-using MosefakApi.Business.Services;
+using MosefakApp.API.Helpers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +29,7 @@ builder.Services.RegisterFluentValidationSettings();
 
 builder.Services.AddTransient(typeof(IAuthorizationHandler), typeof(PermissionAuthorizationHandler));
 builder.Services.AddTransient(typeof(IAuthorizationPolicyProvider), typeof(PermissionAuthorizationPolicyProvider));
-
+builder.Services.AddSingleton<AppointmentJob>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 
 builder.Services.AddSwaggerServices();
@@ -52,20 +52,6 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Run recurring job
-using (var scope = app.Services.CreateScope())
-{
-    var appointmentService = scope.ServiceProvider.GetRequiredService<AppointmentService>();
-
-    string recurringJobId = "activateEmployeesJob";
-    // Using service-based API for recurring job
-    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-    recurringJobManager.AddOrUpdate(
-        recurringJobId,
-        () => appointmentService.AutoCancelUnpaidAppointments(),
-        Cron.Daily
-    );
-}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -98,4 +84,25 @@ app.UseMiddleware<ErrorHandlingMiddleWare>();
 
 
 app.MapControllers();
+// ✅ Schedule the Recurring Job
+ScheduleRecurringJob(app.Services);
+
 app.Run();
+
+
+void ScheduleRecurringJob(IServiceProvider services)
+{
+    using (var scope = services.CreateScope())
+    {
+        var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+        var job = scope.ServiceProvider.GetRequiredService<AppointmentJob>();
+
+        string recurringJobId = "activateEmployeesJob";
+
+        recurringJobManager.AddOrUpdate(
+            recurringJobId,
+            () => job.Run(), // ✅ Uses DI properly
+            Cron.Daily
+        );
+    }
+}

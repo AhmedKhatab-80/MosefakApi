@@ -4,8 +4,9 @@
     {
         public BookAppointmentRequestValidator()
         {
-            RuleFor(x => x.AppointmentTypeId)
-                .GreaterThan(0).WithMessage("Appointment Type Id must be valid.");
+
+            Include(new RequiredStringValidator<BookAppointmentRequest>(x => x.AppointmentTypeId, "AppointmentTypeId"));
+
 
             RuleFor(x => x.DoctorId)
                 .GreaterThan(0).WithMessage("Doctor ID must be valid.");

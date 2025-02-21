@@ -1,4 +1,6 @@
-﻿global using Microsoft.AspNetCore.Authorization;
+﻿global using Hangfire;
+global using MosefakApi.Business.Services;
+global using Microsoft.AspNetCore.Authorization;
 global using MosefakApi.DependencyInjection;
 global using MosefakApp.API.Extensions;
 global using MosefakApp.API.Filters.Authentication;
@@ -52,6 +54,14 @@ global using MosefakApp.Core.Abstractions;
 global using Serilog;
 global using MosefakApp.Core.Dtos.Period.Responses;
 global using MosefakApp.Core.Dtos.Schedule.Requests;
+global using MosefakApp.Domains.Enums;
+global using MosefakApp.Core.Dtos.Specialization.Requests;
+global using MosefakApp.Core.Dtos.Award.Requests;
+global using MosefakApp.Core.Dtos.Clinic.Requests;
+global using MosefakApp.Core.Dtos.Clinic.Responses;
+global using MosefakApp.Core.Dtos.Education.Requests;
+global using MosefakApp.Core.Dtos.Review.Responses;
+global using MosefakApp.Core.Dtos.Experience.Requests;
 
 
 

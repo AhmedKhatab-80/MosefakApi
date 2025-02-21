@@ -1,8 +1,6 @@
-﻿using MosefakApp.Core.Dtos.Specialization.Requests;
-
-namespace MosefakApp.API.Controllers
+﻿namespace MosefakApp.API.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/doctors")]
     [ApiController]
     [Cached(duration: 600)] // 10 minutes
     [EnableRateLimiting(policyName: RateLimiterType.Concurrency)]
@@ -43,15 +41,24 @@ namespace MosefakApp.API.Controllers
             return Ok(doctor);
         }
 
+
+        // ✅ Search doctors
+        [HttpPost("search")]
+        [HasPermission(Permissions.SearchDoctors)]
+        public async Task<ActionResult<List<DoctorResponse>>> SearchDoctorsAsync([FromBody] DoctorSearchFilter filter)
+        {
+            var query = await _doctorService.SearchDoctorsAsync(filter);
+            return Ok(query);
+        }
+
+
         // ✅ Get doctor profile (Authenticated Doctor)
         [HttpGet("profile")]
         [HasPermission(Permissions.ViewDoctorProfile)]
         public async Task<ActionResult<DoctorProfileResponse>> GetDoctorProfile()
         {
             var userId = User.GetUserId();
-
             var profile = await _doctorService.GetDoctorProfile(userId);
-
             profile.Id = ProtectId(userId.ToString());
             return Ok(profile);
         }
@@ -62,7 +69,7 @@ namespace MosefakApp.API.Controllers
         public async Task<ActionResult<List<DoctorResponse>>> GetTopTenDoctors()
         {
             var doctors = await _doctorService.TopTenDoctors();
-            
+
             if (doctors is null)
                 return Ok();
 
@@ -71,136 +78,125 @@ namespace MosefakApp.API.Controllers
             return Ok(doctors);
         }
 
-        [HttpGet("search-doctors")]
-        public async Task<ActionResult<List<DoctorResponse>>> SearchDoctorsAsync([FromForm] DoctorSearchFilter filter)
-        {
-            var query = await _doctorService.SearchDoctorsAsync(filter);
 
-            return Ok(query);
-        }
-
-        [HttpGet("upcoming-appointments")]
+        // ✅ Get upcoming appointments
+        [HttpGet("appointments/upcoming")]
         [HasPermission(Permissions.ViewUpcomingAppointmentsForDoctor)]
-        public async Task<ActionResult<IEnumerable<AppointmentDto>>?> GetUpcomingAppointmentsAsync()
+        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetUpcomingAppointmentsAsync()
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetUpcomingAppointmentsAsync(userId);
-
             return Ok(query);
         }
 
 
-        [HttpGet("past-appointments")]
+        // ✅ Get past appointments
+        [HttpGet("appointments/past")]
         [HasPermission(Permissions.ViewPastAppointmentsForDoctor)]
-        public async Task<ActionResult<IEnumerable<AppointmentDto>>?> GetPastAppointmentsAsync()
+        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetPastAppointmentsAsync()
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetPastAppointmentsAsync(userId);
-
             return Ok(query);
         }
 
-        [HttpGet("total-appointments")]
+
+        // ✅ Get total appointments
+        [HttpGet("appointments/total")]
         [HasPermission(Permissions.GetTotalAppointmentsAsync)]
         public async Task<ActionResult<long>> GetTotalAppointmentsAsync()
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.GetTotalAppointmentsAsync(doctorId);
-
             return Ok(query);
         }
 
-        [HttpPost("add-specialization")]
-        public async Task<ActionResult<bool>> AddSpecializationAsync(SpecializationRequest request)
-        {
-            var doctorId = User.GetUserId();
-            var query = await _doctorService.AddSpecializationAsync(doctorId,request);
-
-            return Ok(query);
-        }
-
-        [HttpDelete("remove-specialization/{specializationId}")]
-        public async Task<ActionResult<bool>> RemoveSpecializationAsync(string specializationId)
-        {
-            var unpotectedSpecializationId = UnprotectId(specializationId);
-
-            if (unpotectedSpecializationId == null)
-                throw new BadRequest("invalid specialization id");
-
-            var doctorId = User.GetUserId();
-            
-            var query = await _doctorService.RemoveSpecializationAsync(doctorId, unpotectedSpecializationId.Value);
-
-            return Ok(query);
-        }
-
-        [HttpPost("upload-image")]
+        // ✅ Upload profile image
+        [HttpPost("profile/image")]
         [HasPermission(Permissions.UploadDoctorProfileImage)]
         public async Task<ActionResult<bool>> UploadProfileImageAsync(IFormFile imageFile, CancellationToken cancellationToken = default)
         {
             var userId = User.GetUserId();
-
             var query = await _doctorService.UploadProfileImageAsync(userId, imageFile, cancellationToken);
-
             return Ok(query);
         }
 
-        [HttpPut("edit-specialization")]
-        public async Task<ActionResult<bool>> EditSpecializationAsync([FromQuery] string specializationId, SpecializationRequest request)
+        // ✅ Specialization Management
+        [HttpPost("specializations")]
+        [HasPermission(Permissions.CreateSpecialization)]
+        public async Task<ActionResult<bool>> AddSpecializationAsync([FromBody] SpecializationRequest request)
         {
-            var unpotectedSpecializationId = UnprotectId(specializationId);
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddSpecializationAsync(doctorId, request);
+            return Ok(query);
+        }
 
-            if (unpotectedSpecializationId == null)
-                throw new BadRequest("invalid specialization id");
+        [HttpPut("specializations/{specializationId}")]
+        [HasPermission(Permissions.EditSpecialization)]
+        public async Task<ActionResult<bool>> EditSpecializationAsync([FromQuery] string specializationId, [FromBody] SpecializationRequest request)
+        {
+            var unprotectedSpecializationId = UnprotectId(specializationId);
+            if (unprotectedSpecializationId == null) return BadRequest("Invalid specialization ID");
 
             var doctorId = User.GetUserId();
-
-            var query = await _doctorService.EditSpecializationAsync(doctorId, unpotectedSpecializationId.Value,request);
-
+            var query = await _doctorService.EditSpecializationAsync(doctorId, unprotectedSpecializationId.Value, request);
             return Ok(query);
         }
 
-        // ✅ Add a new doctor (For Admin)
+        [HttpDelete("specializations/{specializationId}")]
+        [HasPermission(Permissions.RemoveSpecialization)]
+        public async Task<ActionResult<bool>> RemoveSpecializationAsync(string specializationId)
+        {
+            var unprotectedSpecializationId = UnprotectId(specializationId);
+            if (unprotectedSpecializationId == null) return BadRequest("Invalid specialization ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveSpecializationAsync(doctorId, unprotectedSpecializationId.Value);
+            return Ok(query);
+        }
+
+        // ✅ Admin: Add a new doctor
         [HttpPost]
         [HasPermission(Permissions.CreateDoctor)]
-        public async Task<IActionResult> AddDoctor(DoctorRequest request)
+        public async Task<IActionResult> AddDoctor([FromBody] DoctorRequest request)
         {
             await _doctorService.AddDoctor(request);
             return CreatedAtAction(nameof(GetDoctorById), new { doctorId = request.AppUserId }, null);
         }
 
-        // ✅ Complete doctor profile (For Doctor)
-        [HttpPost("complete-profile")]
+        // ✅ Complete doctor profile
+        [HttpPost("profile/complete")]
         [HasPermission(Permissions.CompleteDoctorProfile)]
-        public async Task<IActionResult> CompleteDoctorProfile(CompleteDoctorProfileRequest request)
+        public async Task<IActionResult> CompleteDoctorProfile([FromBody] CompleteDoctorProfileRequest request)
         {
             var userId = User.GetUserId();
-
             await _doctorService.CompleteDoctorProfile(userId, request);
             return Ok();
         }
 
         [HttpPut("update-working-times/{clinicId}")]
-        public async Task<ActionResult<bool>> UpdateWorkingTimesAsync(int clinicId, IEnumerable<WorkingTimeRequest> workingTimes)
+        public async Task<ActionResult<bool>> UpdateWorkingTimesAsync(string clinicId, IEnumerable<WorkingTimeRequest> workingTimes)
         {
+            var unprotectedId = UnprotectId(clinicId);
+            if (unprotectedId == null) return BadRequest("Invalid clinic ID");
+
             var userId = User.GetUserId();
-            var query = await _doctorService.UpdateWorkingTimesAsync(userId,clinicId, workingTimes);    
+            var query = await _doctorService.UpdateWorkingTimesAsync(userId, unprotectedId.Value, workingTimes);
 
             return Ok(query);
         }
 
-        // ✅ Update doctor profile (For Doctor)
-        [HttpPut("update-profile")]
+        // ✅ Update doctor profile
+        [HttpPut("profile/update")]
         [HasPermission(Permissions.EditDoctorProfile)]
         public async Task<IActionResult> UpdateDoctorProfile([FromForm] DoctorProfileUpdateRequest request, CancellationToken cancellationToken = default)
         {
             var userId = User.GetUserId();
-
             await _doctorService.UpdateDoctorProfile(request, userId, cancellationToken);
             return Ok();
         }
 
-        // ✅ Delete doctor (For Admin)
+        // ✅ Admin: Delete a doctor
         [HttpDelete("{doctorId}")]
         [HasPermission(Permissions.DeleteDoctor)]
         public async Task<IActionResult> DeleteDoctor(string doctorId)
@@ -212,22 +208,219 @@ namespace MosefakApp.API.Controllers
             return NoContent();
         }
 
-        // ✅ Get available time slots for a doctor
-        [HttpGet("{doctorId}/available-time-slots")]
+        // ✅ Get doctor's available time slots
+        [HttpGet("{doctorId}/clinics/{clinicId}/appointments/{appointmentTypeId}/available-slots")]
         [HasPermission(Permissions.ViewAvailableTimeSlots)]
-        public async Task<ActionResult<List<TimeSlot>>> GetAvailableTimeSlots(string doctorId,[FromQuery] string clinicId,[FromQuery] string appointmentTypeId,[FromQuery] DayOfWeek selectedDay)
+        public async Task<ActionResult<List<TimeSlot>>> GetAvailableTimeSlots(string doctorId, string clinicId, string appointmentTypeId, [FromQuery] DayOfWeek selectedDay)
         {
             var unprotectedId = UnprotectId(doctorId);
-            if (unprotectedId == null) return BadRequest("Invalid doctor ID");
-
-            var unprotectedclinicId = UnprotectId(clinicId);
-            if (unprotectedclinicId == null) return BadRequest("Invalid clinic ID");
-
+            var unprotectedClinicId = UnprotectId(clinicId);
             var unprotectedAppointmentTypeId = UnprotectId(appointmentTypeId);
-            if (unprotectedAppointmentTypeId == null) return BadRequest("Invalid Appointment Type Id");
 
-            var availableSlots = await _doctorService.GetAvailableTimeSlots(unprotectedId.Value, unprotectedclinicId.Value, unprotectedAppointmentTypeId.Value, selectedDay);
+            if (unprotectedId == null || unprotectedClinicId == null || unprotectedAppointmentTypeId == null)
+                return BadRequest("Invalid ID provided");
+
+            var availableSlots = await _doctorService.GetAvailableTimeSlots(unprotectedId.Value, unprotectedClinicId.Value, unprotectedAppointmentTypeId.Value, selectedDay);
             return Ok(availableSlots);
+        }
+
+        // ✅ Awards Management
+        [HttpPost("awards")]
+        [HasPermission(Permissions.CreateAward)]
+        public async Task<ActionResult<bool>> AddAwardAsync([FromBody] AwardRequest request, CancellationToken cancellationToken = default)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddAwardAsync(doctorId, request, cancellationToken);
+            return Ok(query);
+        }
+
+        [HttpPut("awards/{awardId}")]
+        [HasPermission(Permissions.EditAward)]
+        public async Task<ActionResult<bool>> EditAwardAsync(string awardId, [FromBody] AwardRequest request)
+        {
+            var unprotectedAwardId = UnprotectId(awardId);
+            if (unprotectedAwardId == null) return BadRequest("Invalid Award ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.EditAwardAsync(doctorId, unprotectedAwardId.Value, request);
+            return Ok(query);
+        }
+
+        [HttpDelete("awards/{awardId}")]
+        [HasPermission(Permissions.RemoveAward)]
+        public async Task<ActionResult<bool>> RemoveAwardAsync(string awardId)
+        {
+            var unprotectedAwardId = UnprotectId(awardId);
+            if (unprotectedAwardId == null) return BadRequest("Invalid Award ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveAwardAsync(doctorId, unprotectedAwardId.Value);
+            return Ok(query);
+        }
+
+        // ✅ Education Management
+        [HttpPost("education")]
+        [HasPermission(Permissions.CreateEducation)]
+        public async Task<ActionResult<bool>> AddEducationAsync([FromBody] EducationRequest request, CancellationToken cancellationToken = default)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddEducationAsync(doctorId, request, cancellationToken);
+            return Ok(query);
+        }
+
+        [HttpPut("education/{educationId}")]
+        [HasPermission(Permissions.EditEducation)]
+        public async Task<ActionResult<bool>> EditEducationAsync(string educationId, [FromBody] EducationRequest request, CancellationToken cancellationToken = default)
+        {
+            var unprotectedEducationId = UnprotectId(educationId);
+            if (unprotectedEducationId == null) return BadRequest("Invalid Education ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.EditEducationAsync(doctorId, unprotectedEducationId.Value, request, cancellationToken);
+            return Ok(query);
+        }
+
+        [HttpDelete("education/{educationId}")]
+        [HasPermission(Permissions.RemoveEducation)]
+        public async Task<ActionResult<bool>> RemoveEducationAsync(string educationId)
+        {
+            var unprotectedEducationId = UnprotectId(educationId);
+            if (unprotectedEducationId == null) return BadRequest("Invalid Education ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveEducationAsync(doctorId, unprotectedEducationId.Value);
+            return Ok(query);
+        }
+
+        [HttpPost("experience")]
+        [HasPermission(Permissions.CreateExperience)]
+        public async Task<ActionResult<bool>> AddExperienceAsync(ExperienceRequest request, CancellationToken cancellationToken = default)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddExperienceAsync(doctorId, request, cancellationToken);
+            return Ok(query);
+        }
+
+
+        [HttpPut("experience/{experienceId}")]
+        [HasPermission(Permissions.EditExperience)]
+        public async Task<ActionResult<bool>> EditExperienceAsync(string experienceId, ExperienceRequest request, CancellationToken cancellationToken = default)
+        {
+            var unprotectedExperienceId = UnprotectId(experienceId);
+            if (unprotectedExperienceId == null) return BadRequest("Invalid Experience ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveEducationAsync(doctorId, unprotectedExperienceId.Value);
+            return Ok(query);
+        }
+
+        [HttpDelete("experience/{experienceId}")]
+        [HasPermission(Permissions.RemoveExperience)]
+        public async Task<ActionResult<bool>> RemoveExperienceAsync(string experienceId)
+        {
+            var unprotectedExperienceId = UnprotectId(experienceId);
+            if (unprotectedExperienceId == null) return BadRequest("Invalid Experience ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveExperienceAsync(doctorId, unprotectedExperienceId.Value);
+            return Ok(query);
+        }
+
+        // ✅ Add a new clinic
+        [HttpPost("clinics")]
+        [HasPermission(Permissions.CreateClinic)]
+        public async Task<ActionResult<bool>> AddClinicAsync([FromBody] ClinicRequest request, CancellationToken cancellationToken = default)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.AddClinicAsync(doctorId, request, cancellationToken);
+            return Ok(query);
+        }
+
+        // ✅ Edit a clinic
+        [HttpPut("clinics/{clinicId}")]
+        [HasPermission(Permissions.EditClinic)]
+        public async Task<ActionResult<bool>> EditClinicAsync(string clinicId, [FromBody] ClinicRequest request, CancellationToken cancellationToken = default)
+        {
+            var unprotectedClinicId = UnprotectId(clinicId);
+            if (unprotectedClinicId == null) return BadRequest("Invalid Clinic ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.EditClinicAsync(doctorId, unprotectedClinicId.Value, request, cancellationToken);
+            return Ok(query);
+        }
+
+        // ✅ Remove a clinic
+        [HttpDelete("clinics/{clinicId}")]
+        [HasPermission(Permissions.RemoveClinic)]
+        public async Task<ActionResult<bool>> RemoveClinicAsync(string clinicId)
+        {
+            var unprotectedClinicId = UnprotectId(clinicId);
+            if (unprotectedClinicId == null) return BadRequest("Invalid Clinic ID");
+
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.RemoveClinicAsync(doctorId, unprotectedClinicId.Value);
+            return Ok(query);
+        }
+
+        // ✅ Get all clinics of a doctor
+        [HttpGet("{doctorId}/clinics")]
+        [HasPermission(Permissions.ViewClinics)]
+        public async Task<ActionResult<IEnumerable<ClinicResponse>>> GetDoctorClinicsAsync(string doctorId)
+        {
+            var unprotectedDoctorId = UnprotectId(doctorId);
+            if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
+
+            var query = await _doctorService.GetDoctorClinicsAsync(unprotectedDoctorId.Value);
+            query.ForEach(c => c.Id = ProtectId(c.Id));
+            return Ok(query);
+        }
+
+        // ✅ Get doctor reviews
+        [HttpGet("reviews/{doctorId}")]
+        [HasPermission(Permissions.ViewDoctorReviews)]
+        public async Task<ActionResult<List<ReviewResponse>?>> GetDoctorReviewsAsync(string doctorId)
+        {
+            var unprotectedDoctorId = UnprotectId(doctorId);
+            if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
+
+            var query = await _doctorService.GetDoctorReviewsAsync(unprotectedDoctorId.Value);
+
+            if (query is not null)
+                query.ForEach(r => r.Id = ProtectId(r.Id));
+
+            return Ok(query);
+        }
+
+
+        // ✅ Get average rating
+        [HttpGet("reviews/{doctorId}/average-rating")]
+        [HasPermission(Permissions.ViewAverageRating)]
+        public async Task<ActionResult<double>> GetAverageRatingAsync(string doctorId)
+        {
+            var unprotectedDoctorId = UnprotectId(doctorId);
+            if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
+            var query = await _doctorService.GetAverageRatingAsync(unprotectedDoctorId.Value);
+            return Ok(query);
+        }
+
+        // ✅ Get total patients served
+        [HttpGet("analytics/total-patients")]
+        [HasPermission(Permissions.ViewTotalPatientsServed)]
+        public async Task<ActionResult<long>> GetTotalPatientsServedAsync()
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.GetTotalPatientsServedAsync(doctorId);
+            return Ok(query);
+        }
+
+        // ✅ Get doctor's earnings
+        [HttpGet("earnings-report")]
+        [HasPermission(Permissions.ViewEarningsReport)]
+        public async Task<ActionResult<DoctorEarningsResponse>> GetEarningsReportAsync([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.GetEarningsReportAsync(doctorId, startDate, endDate);
+            return Ok(query);
         }
 
         // 🔥 Utility Methods for ID Protection
