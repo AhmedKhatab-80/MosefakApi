@@ -6,6 +6,7 @@
         TRepository GetCustomRepository<TRepository>() where TRepository : class;
         Task<int> CommitAsync(CancellationToken cancellationToken = default);
         Task<IDbContextTransaction> BeginTransactionAsync();
+        IExecutionStrategy CreateExecutionStrategy(); 
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();
     }

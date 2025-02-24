@@ -2,7 +2,7 @@
 {
     public class EducationResponse
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public string Degree { get; set; } = null!; // e.g., MBBS, MD, PhD
         public string Major { get; set; } = null!; // e.g., Cardiology, Surgery, Pediatrics
         public string UniversityName { get; set; } = null!; // e.g., Harvard Medical School
@@ -12,6 +12,5 @@
         public DateOnly? EndDate { get; set; } // End Year (Graduation Year)
         public bool CurrentlyStudying { get; set; } // If still studying (no EndDate)
         public string? AdditionalNotes { get; set; } // Optional field for Thesis, Research, etc.
-        public int DoctorId { get; set; }
     }
 }

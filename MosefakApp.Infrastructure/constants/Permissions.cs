@@ -28,7 +28,7 @@
         public const string ViewPastAppointmentsForDoctor = "Permissions.Doctors.ViewPastAppointmentsForDoctor";
         public const string GetTotalAppointmentsAsync = "Permissions.Doctors.GetTotalAppointmentsAsync";
         public const string CreateDoctor = "Permissions.Doctors.Create";
-        public const string UploadDoctorProfileImage = "Permissions.Doctors.uploadImage";
+        public const string UploadDoctorProfileImage = "Permissions.Doctors.UploadImage";
         public const string CompleteDoctorProfile = "Permissions.Doctors.CompleteDoctorProfile";
         public const string EditDoctor = "Permissions.Doctors.Edit";
         public const string EditDoctorProfile = "Permissions.Doctors.EditDoctorProfile";
@@ -44,6 +44,7 @@
         public const string DeleteAppointmentTypes = "Permissions.Doctors.DeleteAppointmentTypes";
 
         public const string ViewPatientAppointments = "Permissions.Appointments.ViewPatientAppointments";
+        public const string UploadPatientProfileImage = "Permissions.Patient.UploadPatientProfileImage";
         public const string ViewDoctorAppointments = "Permissions.Appointments.ViewDoctorAppointments";
         public const string ViewPendingAppointmentsForDoctor = "Permissions.Appointments.ViewPendingAppointmentsForDoctor";
         public const string ViewAppointmentsForDoctorInRange = "Permissions.Appointments.ViewAppointmentsForDoctorInRange";
@@ -62,18 +63,22 @@
         public const string ViewPatientProfile = "Permissions.Patients.ViewProfile";
         public const string EditPatientProfile = "Permissions.Patients.EditPatientProfile";
 
+        public const string ViewSpecializations = "Permissions.Specialization.ViewSpecializations";
         public const string CreateSpecialization = "Permissions.Specializations.CreateSpecialization";
         public const string EditSpecialization = "Permissions.Specializations.EditSpecialization";
         public const string RemoveSpecialization = "Permissions.Specializations.RemoveSpecialization";
 
-        public const string CreateExperience = "Permissions.Specializations.CreateExperience";
+        public const string ViewExperiences = "Permissions.Experience.ViewExperiences";
+        public const string CreateExperience = "Permissions.Experiences.CreateExperience";
         public const string EditExperience = "Permissions.Experience.EditExperience";
         public const string RemoveExperience = "Permissions.Experience.RemoveExperience";
 
+        public const string ViewAwards = "Permissions.Award.ViewAwards";
         public const string CreateAward = "Permissions.Award.CreateAward";
         public const string EditAward = "Permissions.Award.EditAward";
         public const string RemoveAward = "Permissions.Award.RemoveAward";
 
+        public const string ViewEducations = "Permissions.Education.ViewEducations";
         public const string CreateEducation = "Permissions.Education.CreateEducation";
         public const string EditEducation = "Permissions.Education.EditEducation";
         public const string RemoveEducation = "Permissions.Education.RemoveEducation";

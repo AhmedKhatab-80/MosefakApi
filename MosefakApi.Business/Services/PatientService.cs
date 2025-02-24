@@ -73,6 +73,12 @@
 
         public async Task<bool> UploadProfileImageAsync(int patientId, IFormFile imageFile, CancellationToken cancellationToken = default)
         {
+            if (imageFile == null || imageFile.Length == 0)
+                throw new BadRequest("Invalid image file.");
+
+            // 🔹 Validate Image File (Size & Format)
+            ValidateImageFile(imageFile);
+
             var patient = await CheckPatientExist(patientId);
 
             string oldPath = patient.ImagePath ?? string.Empty;
@@ -82,7 +88,7 @@
             {
                 if (imageFile != null)
                 {
-                    newPath = await _imageService.UploadImageOnServer("User", imageFile, false, oldPath, cancellationToken);
+                    newPath = await _imageService.UploadImageOnServer(imageFile, false, oldPath, cancellationToken);
                     patient.ImagePath = newPath;
                 }
 
@@ -95,14 +101,14 @@
 
                     // Rollback: remove newly uploaded image if user update fails
                     if (!string.IsNullOrEmpty(newPath))
-                        await _imageService.RemoveImage($"User/{newPath}");
+                        await _imageService.RemoveImage($"{newPath}");
 
                     throw new BadRequest($"Profile image update failed: {errors}");
                 }
 
                 // If image update successful, remove the old image safely
                 if (!string.IsNullOrEmpty(oldPath))
-                    await _imageService.RemoveImage($"User/{oldPath}");
+                    await _imageService.RemoveImage($"{oldPath}");
 
                 // Invalidate profile cache since image changed
                 await _cacheService.RemoveCachedResponseAsync(CacheKey_PatientProfile);
@@ -127,6 +133,19 @@
             }
 
             return user;
+        }
+
+        private void ValidateImageFile(IFormFile file)
+        {
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+            var maxFileSize = 2 * 1024 * 1024; // 2MB
+
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
+            if (!allowedExtensions.Contains(fileExtension))
+                throw new BadRequest($"Invalid file type. Allowed types: {string.Join(", ", allowedExtensions)}");
+
+            if (file.Length > maxFileSize)
+                throw new BadRequest("File size exceeds the 2MB limit.");
         }
     }
 

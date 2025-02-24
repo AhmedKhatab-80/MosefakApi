@@ -2,10 +2,9 @@
 {
     public class WorkingTimeResponse
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public DayOfWeek Day { get; set; }
-        public ICollection<PeriodResponse> Periods { get; set; } = new HashSet<PeriodResponse>();
-        public int ClinicId { get; set; }
+        public List<PeriodResponse> Periods { get; set; } = new List<PeriodResponse>();
         public bool IsAvailable { get; set; }
     }
 }

@@ -6,7 +6,7 @@
         public string LastName { get; set; } = null!;
         public string? PhoneNumber { get; set; }
         public Gender? Gender { get; set; }
-        public AddressUserResponse Address { get; set; } = null!;
+        public AddressUserRequest Address { get; set; } = null!;
         public DateTime? DateOfBirth { get; set; }
     }
 }

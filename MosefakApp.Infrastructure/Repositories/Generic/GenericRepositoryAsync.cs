@@ -55,7 +55,7 @@
                     query = query.Include(include);
             }
 
-            return await _entity.FirstOrDefaultAsync(predicate) ?? null!;
+            return await query.FirstOrDefaultAsync(predicate) ?? null!;
         }
 
         public async Task<IList<T>> GetAllAsync()
@@ -73,7 +73,7 @@
                     query = query.Include(include);
             }
 
-            return await _entity.ToListAsync();
+            return await query.ToListAsync();
         }
 
         public async Task<IList<T>> GetAllAsync(Expression<Func<T, bool>> expression, IEnumerable<string> includes = null!)
@@ -86,7 +86,7 @@
                     query = query.Include(include);
             }
 
-            return await _entity.ToListAsync();
+            return await query.ToListAsync();
         }
 
         public async Task<T> GetByIdAsync(object id)
@@ -122,8 +122,11 @@
 
         public async Task<double> GetAverage(Expression<Func<T, double>> expression, Expression<Func<T, bool>> criteria)
         {
-            return await _entity.Where(criteria).AverageAsync(expression);
+            var query = _entity.Where(criteria);
+
+            return await query.AnyAsync() ? await query.AverageAsync(expression) : 0.0;
         }
+
 
         public async Task<double> GetAverage(Expression<Func<T, double>> expression)
         {

@@ -93,7 +93,6 @@
 
                 throw new BadRequest($"{string.Join(",", errors)}");
             }
-
         }
 
         public async Task ConfirmEmailAsync(ConfirmEmailRequest request)
@@ -204,12 +203,14 @@
 
         private async Task SendConfirmationEmail(AppUser appUser, string code)
         {
+            string? imageFromGoogle = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTc9APxkj0xClmrU3PpMZglHQkx446nQPG6lA&s";
+
             var origin = _HttpContextAccessor?.HttpContext?.Request.Headers.Origin;
-            var imagePath = $"{origin}/images/Confirmed-rafiki.png";
+            var imagePath = $"{origin}/images/198340114.jpeg";
 
             var body = await _emailBuilder.GenerateEmailBody(
                 templateName: "emailTamplate.html",
-                imageUrl: imagePath,
+                imageUrl: imageFromGoogle,
                 header: $"Hi, {appUser.FirstName}",
                 TextBody: "Please Confirm your email",
                 link: $"{origin}/api/Authentication/confirm-email?userId={appUser.Id}&Code={code}", // will be Url that belong component(confirm-email component) that when open (OnInit) will send this Url and go to url that belong it..
@@ -225,6 +226,7 @@
             string? imageFromGoogle = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTc9APxkj0xClmrU3PpMZglHQkx446nQPG6lA&s";
 
             var origin = _HttpContextAccessor.HttpContext?.Request.Headers.Origin;
+            var imagePath = $"{origin}/images/198340114.jpeg";
 
             var body = await _emailBuilder.GenerateEmailBody(
                 templateName: "forgetPasswordTemplate.html",

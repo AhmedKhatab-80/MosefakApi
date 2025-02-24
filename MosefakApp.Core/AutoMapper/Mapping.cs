@@ -35,6 +35,11 @@
             CreateMap<WorkingTimeRequest, WorkingTime>().ReverseMap();
             CreateMap<WorkingTime, WorkingTimeResponse>().ReverseMap();
 
+            // Period
+
+            CreateMap<PeriodRequest, Period>().ReverseMap();
+            CreateMap<Period, PeriodResponse>().ReverseMap();
+
             // Review
 
             CreateMap<ReviewRequest, Review>().ReverseMap();
@@ -50,7 +55,17 @@
             CreateMap<AppointmentType, AppointmentTypeResponse>().ReverseMap();
             CreateMap<AppointmentTypeRequest, AppointmentType>().ReverseMap();
 
+            CreateMap<Specialization, SpecializationResponse>().ReverseMap();
+            CreateMap<SpecializationRequest, Specialization>().ReverseMap();
 
+            CreateMap<Award, AwardResponse>().ReverseMap();
+            CreateMap<AwardRequest, Award>().ReverseMap();
+
+            CreateMap<Experience, ExperienceResponse>().ReverseMap();
+            CreateMap<ExperienceRequest, Experience>().ReverseMap();
+
+            CreateMap<Education, EducationResponse>().ReverseMap();
+            CreateMap<EducationRequest, Education>().ReverseMap();
         }
     }
 }

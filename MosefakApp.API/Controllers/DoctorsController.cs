@@ -23,6 +23,7 @@
             var doctors = await _doctorService.GetAllDoctors();
 
             doctors.ForEach(d => d.Id = ProtectId(d.Id));
+            doctors.ForEach(d => d.Specializations.ForEach(s => s.Id = ProtectId(s.Id)));
 
             return Ok(doctors);
         }
@@ -37,10 +38,10 @@
 
             var doctor = await _doctorService.GetDoctorById(unprotectedId.Value);
 
-            doctor.Id = ProtectId(doctor.Id);
+            ProtectDoctorDetail(doctor);
+
             return Ok(doctor);
         }
-
 
         // ✅ Search doctors
         [HttpPost("search")]
@@ -48,6 +49,9 @@
         public async Task<ActionResult<List<DoctorResponse>>> SearchDoctorsAsync([FromBody] DoctorSearchFilter filter)
         {
             var query = await _doctorService.SearchDoctorsAsync(filter);
+            query.ForEach(doc=> doc.Id = ProtectId(doc.Id));
+            query.ForEach(d => d.Specializations.ForEach(s => s.Id = ProtectId(s.Id)));
+
             return Ok(query);
         }
 
@@ -59,7 +63,13 @@
         {
             var userId = User.GetUserId();
             var profile = await _doctorService.GetDoctorProfile(userId);
+            
             profile.Id = ProtectId(userId.ToString());
+            profile.Specializations.ForEach(s => s.Id = ProtectId(s.Id));
+            profile.Experiences.ForEach(s => s.Id = ProtectId(s.Id));
+            profile.Awards.ForEach(s => s.Id = ProtectId(s.Id));
+            profile.Education.ForEach(s => s.Id = ProtectId(s.Id));
+
             return Ok(profile);
         }
 
@@ -74,6 +84,7 @@
                 return Ok();
 
             doctors.ForEach(d => d.Id = ProtectId(d.Id));
+            doctors.ForEach(d => d.Specializations.ForEach(s => s.Id = ProtectId(s.Id)));
 
             return Ok(doctors);
         }
@@ -82,10 +93,17 @@
         // ✅ Get upcoming appointments
         [HttpGet("appointments/upcoming")]
         [HasPermission(Permissions.ViewUpcomingAppointmentsForDoctor)]
-        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetUpcomingAppointmentsAsync()
+        public async Task<ActionResult<List<AppointmentDto>>> GetUpcomingAppointmentsAsync()
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetUpcomingAppointmentsAsync(userId);
+
+            if(query is not null)
+            {
+                query.ForEach(a => a.Id = ProtectId(a.Id));
+                query.ForEach(a => a.PatientId = ProtectId(a.PatientId));
+            }
+
             return Ok(query);
         }
 
@@ -93,10 +111,17 @@
         // ✅ Get past appointments
         [HttpGet("appointments/past")]
         [HasPermission(Permissions.ViewPastAppointmentsForDoctor)]
-        public async Task<ActionResult<IEnumerable<AppointmentDto>>> GetPastAppointmentsAsync()
+        public async Task<ActionResult<List<AppointmentDto>>> GetPastAppointmentsAsync()
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetPastAppointmentsAsync(userId);
+
+            if (query is not null)
+            {
+                query.ForEach(a => a.Id = ProtectId(a.Id));
+                query.ForEach(a => a.PatientId = ProtectId(a.PatientId));
+            }
+
             return Ok(query);
         }
 
@@ -121,6 +146,17 @@
             return Ok(query);
         }
 
+        [HttpGet("specializations")]
+        [HasPermission(Permissions.ViewSpecializations)]
+        public async Task<ActionResult<List<SpecializationResponse>?>> GetSpecializations()
+        {
+            var userId = User.GetUserId();
+            var query = await _doctorService.GetSpecializations(userId);
+            if(query != null)
+                query.ForEach(s => s.Id = ProtectId(s.Id));
+            return Ok(query);
+        }
+
         // ✅ Specialization Management
         [HttpPost("specializations")]
         [HasPermission(Permissions.CreateSpecialization)]
@@ -133,7 +169,7 @@
 
         [HttpPut("specializations/{specializationId}")]
         [HasPermission(Permissions.EditSpecialization)]
-        public async Task<ActionResult<bool>> EditSpecializationAsync([FromQuery] string specializationId, [FromBody] SpecializationRequest request)
+        public async Task<ActionResult<bool>> EditSpecializationAsync(string specializationId, [FromBody] SpecializationRequest request)
         {
             var unprotectedSpecializationId = UnprotectId(specializationId);
             if (unprotectedSpecializationId == null) return BadRequest("Invalid specialization ID");
@@ -167,7 +203,7 @@
         // ✅ Complete doctor profile
         [HttpPost("profile/complete")]
         [HasPermission(Permissions.CompleteDoctorProfile)]
-        public async Task<IActionResult> CompleteDoctorProfile([FromBody] CompleteDoctorProfileRequest request)
+        public async Task<IActionResult> CompleteDoctorProfile([FromForm] CompleteDoctorProfileRequest request)
         {
             var userId = User.GetUserId();
             await _doctorService.CompleteDoctorProfile(userId, request);
@@ -189,7 +225,7 @@
         // ✅ Update doctor profile
         [HttpPut("profile/update")]
         [HasPermission(Permissions.EditDoctorProfile)]
-        public async Task<IActionResult> UpdateDoctorProfile([FromForm] DoctorProfileUpdateRequest request, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> UpdateDoctorProfile(DoctorProfileUpdateRequest request, CancellationToken cancellationToken = default)
         {
             var userId = User.GetUserId();
             await _doctorService.UpdateDoctorProfile(request, userId, cancellationToken);
@@ -222,6 +258,17 @@
 
             var availableSlots = await _doctorService.GetAvailableTimeSlots(unprotectedId.Value, unprotectedClinicId.Value, unprotectedAppointmentTypeId.Value, selectedDay);
             return Ok(availableSlots);
+        }
+
+        [HttpGet("awards")]
+        [HasPermission(Permissions.ViewAwards)]
+        public async Task<ActionResult<List<AwardResponse>?>> GetAwards()
+        {
+            var userId = User.GetUserId();
+            var query = await _doctorService.GetAwards(userId);
+            if (query != null)
+                query.ForEach(s => s.Id = ProtectId(s.Id));
+            return Ok(query);
         }
 
         // ✅ Awards Management
@@ -258,10 +305,21 @@
             return Ok(query);
         }
 
+        [HttpGet("educations")]
+        [HasPermission(Permissions.ViewEducations)]
+        public async Task<ActionResult<List<EducationResponse>?>> GetEducations()
+        {
+            var userId = User.GetUserId();
+            var query = await _doctorService.GetEducations(userId);
+            if (query != null)
+                query.ForEach(s => s.Id = ProtectId(s.Id));
+            return Ok(query);
+        }
+
         // ✅ Education Management
         [HttpPost("education")]
         [HasPermission(Permissions.CreateEducation)]
-        public async Task<ActionResult<bool>> AddEducationAsync([FromBody] EducationRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> AddEducationAsync([FromForm] EducationRequest request, CancellationToken cancellationToken = default)
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.AddEducationAsync(doctorId, request, cancellationToken);
@@ -270,7 +328,7 @@
 
         [HttpPut("education/{educationId}")]
         [HasPermission(Permissions.EditEducation)]
-        public async Task<ActionResult<bool>> EditEducationAsync(string educationId, [FromBody] EducationRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> EditEducationAsync(string educationId, [FromForm] EducationRequest request, CancellationToken cancellationToken = default)
         {
             var unprotectedEducationId = UnprotectId(educationId);
             if (unprotectedEducationId == null) return BadRequest("Invalid Education ID");
@@ -292,9 +350,20 @@
             return Ok(query);
         }
 
+        [HttpGet("experiences")]
+        [HasPermission(Permissions.ViewExperiences)]
+        public async Task<ActionResult<List<ExperienceResponse>?>> GetExperiences()
+        {
+            var userId = User.GetUserId();
+            var query = await _doctorService.GetExperiences(userId);
+            if (query != null)
+                query.ForEach(s => s.Id = ProtectId(s.Id));
+            return Ok(query);
+        }
+
         [HttpPost("experience")]
         [HasPermission(Permissions.CreateExperience)]
-        public async Task<ActionResult<bool>> AddExperienceAsync(ExperienceRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> AddExperienceAsync([FromForm] ExperienceRequest request, CancellationToken cancellationToken = default)
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.AddExperienceAsync(doctorId, request, cancellationToken);
@@ -304,13 +373,13 @@
 
         [HttpPut("experience/{experienceId}")]
         [HasPermission(Permissions.EditExperience)]
-        public async Task<ActionResult<bool>> EditExperienceAsync(string experienceId, ExperienceRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> EditExperienceAsync(string experienceId, [FromForm] ExperienceRequest request, CancellationToken cancellationToken = default)
         {
             var unprotectedExperienceId = UnprotectId(experienceId);
             if (unprotectedExperienceId == null) return BadRequest("Invalid Experience ID");
 
             var doctorId = User.GetUserId();
-            var query = await _doctorService.RemoveEducationAsync(doctorId, unprotectedExperienceId.Value);
+            var query = await _doctorService.EditExperienceAsync(doctorId, unprotectedExperienceId.Value, request, cancellationToken);
             return Ok(query);
         }
 
@@ -329,7 +398,7 @@
         // ✅ Add a new clinic
         [HttpPost("clinics")]
         [HasPermission(Permissions.CreateClinic)]
-        public async Task<ActionResult<bool>> AddClinicAsync([FromBody] ClinicRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> AddClinicAsync([FromForm] ClinicRequest request, CancellationToken cancellationToken = default)
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.AddClinicAsync(doctorId, request, cancellationToken);
@@ -339,7 +408,7 @@
         // ✅ Edit a clinic
         [HttpPut("clinics/{clinicId}")]
         [HasPermission(Permissions.EditClinic)]
-        public async Task<ActionResult<bool>> EditClinicAsync(string clinicId, [FromBody] ClinicRequest request, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<bool>> EditClinicAsync(string clinicId, [FromForm] ClinicRequest request, CancellationToken cancellationToken = default)
         {
             var unprotectedClinicId = UnprotectId(clinicId);
             if (unprotectedClinicId == null) return BadRequest("Invalid Clinic ID");
@@ -372,6 +441,9 @@
 
             var query = await _doctorService.GetDoctorClinicsAsync(unprotectedDoctorId.Value);
             query.ForEach(c => c.Id = ProtectId(c.Id));
+            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
+            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
+
             return Ok(query);
         }
 
@@ -426,6 +498,19 @@
         // 🔥 Utility Methods for ID Protection
         private string ProtectId(string id) => _idProtectorService.Protect(int.Parse(id));
         private int? UnprotectId(string id) => _idProtectorService.UnProtect(id);
+
+        private void ProtectDoctorDetail(DoctorDetail doctor)
+        {
+            doctor.Id = ProtectId(doctor.Id);
+            doctor.AppointmentTypes.ForEach(a => a.Id = ProtectId(a.Id));
+            doctor.Educations.ForEach(e => e.Id = ProtectId(e.Id));
+            doctor.Specializations.ForEach(s => s.Id = ProtectId(s.Id));
+            doctor.Awards.ForEach(a => a.Id = ProtectId(a.Id));
+            doctor.Clinics.ForEach(c => c.Id = ProtectId(c.Id));
+            doctor.Clinics.ForEach(c => c.WorkingTimes.ForEach(w => w.Id = ProtectId(w.Id)));
+            doctor.Clinics.ForEach(c => c.WorkingTimes.ForEach(w => w.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
+            doctor.Experiences.ForEach(ex => ex.Id = ProtectId(ex.Id));
+        }
     }
 
 }

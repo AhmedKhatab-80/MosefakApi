@@ -19,36 +19,40 @@
         Task<List<DoctorResponse>> SearchDoctorsAsync(DoctorSearchFilter filter);
 
         // 🔹 Doctor's Appointments
-        Task<IEnumerable<AppointmentDto>?> GetUpcomingAppointmentsAsync(int doctorId); // FromUserClaims
-        Task<IEnumerable<AppointmentDto>?> GetPastAppointmentsAsync(int doctorId); // FromUserClaims
+        Task<List<AppointmentDto>?> GetUpcomingAppointmentsAsync(int doctorId); // FromUserClaims
+        Task<List<AppointmentDto>?> GetPastAppointmentsAsync(int doctorId); // FromUserClaims
         Task<long> GetTotalAppointmentsAsync(int doctorId); // (For Analytics 🔥) // FromUserClaims
 
         // 🔹 Specializations & Experience
+        Task<List<SpecializationResponse>?> GetSpecializations(int doctorId);
         Task<bool> AddSpecializationAsync(int doctorId, SpecializationRequest request); // FromUserClaims
         Task<bool> RemoveSpecializationAsync(int doctorId, int specializationId); // FromUserClaims
         Task<bool> EditSpecializationAsync(int doctorId, int specializationId, SpecializationRequest request); // FromUserClaims
+        Task<List<ExperienceResponse>?> GetExperiences(int doctorId);
         Task<bool> AddExperienceAsync(int doctorId, ExperienceRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditExperienceAsync(int doctorId, int experienceId, ExperienceRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> RemoveExperienceAsync(int doctorId, int experienceId); // FromUserClaims
 
-       
+
         // 🔹 Awards & Achievements
+        Task<List<AwardResponse>?> GetAwards(int doctorId);
         Task<bool> AddAwardAsync(int doctorId, AwardRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditAwardAsync(int doctorId, int awardId, AwardRequest request); // FromUserClaims
         Task<bool> RemoveAwardAsync(int doctorId, int awardId); // FromUserClaims
 
 
         // 🔹 Education
+        Task<List<EducationResponse>?> GetEducations(int doctorId);
         Task<bool> AddEducationAsync(int doctorId, EducationRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditEducationAsync(int doctorId, int educationId, EducationRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> RemoveEducationAsync(int doctorId, int educationId); // FromUserClaims
 
 
         // 🔹 Clinic Management
+        Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); // FromUserClaims
         Task<bool> AddClinicAsync(int doctorId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditClinicAsync(int doctorId, int clinicId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> RemoveClinicAsync(int doctorId, int clinicId); // FromUserClaims
-        Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); // FromUserClaims
 
 
         // 🔹 Doctor Reviews

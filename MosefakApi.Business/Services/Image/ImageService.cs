@@ -13,15 +13,15 @@ namespace MosefakApi.Business.Services.Image
             _basePath = Path.Combine(_environment.WebRootPath, "images");
         }
 
-        public async Task<string> UploadImageOnServer(string folderName, IFormFile image, bool deleteIfExist = false, string oldPath = null, CancellationToken cancellationToken = default)
+        public async Task<string> UploadImageOnServer(IFormFile image, bool deleteIfExist = false, string oldPath = null, CancellationToken cancellationToken = default)
         {
 
-            var folderPath = Path.Combine(_basePath, folderName);
+            var folderPath = Path.Combine(_basePath);
             Directory.CreateDirectory(folderPath); // Ensure the folder exists
 
             if (deleteIfExist && oldPath is not null)
             {
-                await RemoveImage($"{folderName}/{oldPath}");
+                await RemoveImage($"{oldPath}");
             }
 
             string uniqueFileName = Guid.NewGuid().ToString() + "_" + image.FileName;
@@ -32,7 +32,7 @@ namespace MosefakApi.Business.Services.Image
             await image.CopyToAsync(stream, cancellationToken); // will put uploaded file in this path in wwwroot
             stream.Close();
 
-            return uniqueFileName;
+            return $"images/{uniqueFileName}";
         }
 
         public Task RemoveImage(string oldPath)

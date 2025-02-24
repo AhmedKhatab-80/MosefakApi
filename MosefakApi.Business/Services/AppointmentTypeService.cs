@@ -25,12 +25,13 @@
 
         public async Task<bool> AddAppointmentType(int doctorId, AppointmentTypeRequest request)
         {
-            var isExist = await _unitOfWork.Repository<Doctor>().AnyAsync(x => x.AppUserId == doctorId);
+            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
             
-            if (!isExist)
+            if (doctor is null)
                 throw new ItemNotFound("Doctor does not exist");
 
             var appointmentType = _mapper.Map<AppointmentType>(request);
+            appointmentType.DoctorId = doctor.Id;
 
             await _unitOfWork.Repository<AppointmentType>().AddEntityAsync(appointmentType);
             var rowsAffected = await _unitOfWork.CommitAsync();

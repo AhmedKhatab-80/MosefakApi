@@ -21,7 +21,6 @@
         public string PhoneNumber { get; set; } = null!;
 
         // Relationships
-        public int DoctorId { get; set; }
-        public ICollection<WorkingTimeResponse> WorkingTimes { get; set; } = new HashSet<WorkingTimeResponse>();
+        public List<WorkingTimeResponse> WorkingTimes { get; set; } = new List<WorkingTimeResponse>();
     }
 }

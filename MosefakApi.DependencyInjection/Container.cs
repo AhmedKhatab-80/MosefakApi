@@ -13,7 +13,7 @@
 
             services.RegisterHanjFire(configuration);
 
-          //  services.RegisterRedisConfig(configuration);
+            //  services.RegisterRedisConfig(configuration);
 
             // register Identity
 

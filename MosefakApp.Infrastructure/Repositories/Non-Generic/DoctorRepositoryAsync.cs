@@ -1,6 +1,4 @@
-﻿using MosefakApp.Shared.Exceptions.Base;
-
-namespace MosefakApp.Infrastructure.Repositories.Non_Generic
+﻿namespace MosefakApp.Infrastructure.Repositories.Non_Generic
 {
     public class DoctorRepositoryAsync : GenericRepositoryAsync<Doctor>, IDoctorRepositoryAsync
     {
@@ -21,6 +19,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
             var query = await _appDbContext.Doctors
                 .Include(d => d.Specializations) // Include related specializations
                 .Include(d => d.Reviews) // Include related specializations
+                .Include(d => d.Experiences) // Include related specializations
                 .Select(d => new
                 {
                     d.Id,
@@ -28,7 +27,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                     d.TotalYearsOfExperience,
                     Specializations = d.Specializations.Select(s => new SpecializationResponse
                     {
-                        Id = s.Id,
+                        Id = s.Id.ToString(),
                         Name = s.Name,
                         Category = s.Category,
                     })
@@ -61,7 +60,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                 {
                     Id = d.Id.ToString(),
                     FullName = userDetails.ContainsKey(d.AppUserId) ? userDetails[d.AppUserId].FullName : "Unknown",
-                    ImagePath = userDetails.ContainsKey(d.AppUserId) ? $"{_baseUrl}{userDetails[d.AppUserId].ImagePath}" : $"{_baseUrl}default.jpg",
+                    ImagePath = userDetails.ContainsKey(d.AppUserId) ? $"{_baseUrl}/images/{userDetails[d.AppUserId].ImagePath}" : $"{_baseUrl}default.jpg",
                     TotalYearsOfExperience = d.TotalYearsOfExperience,
                     Specializations = d.Specializations.ToList(),
                     NumberOfReviews = d.ReviewCount,
@@ -110,6 +109,9 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                                                    .Include(x => x.Reviews)
                                                    .Include(x => x.Specializations)
                                                    .Include(x => x.AppointmentTypes)
+                                                   .Include(x => x.Educations)
+                                                   .Include(x => x.Experiences)
+                                                   .Include(x => x.Awards)
                                                    .FirstOrDefaultAsync(x => x.Id == doctorId);
 
             return query!;
@@ -121,12 +123,12 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                 from doctor in _appDbContext.Doctors
                 where doctor.AppUserId == appUserIdFromClaims
                 select new
-                {
+                {   
                     Doctor = doctor,
                     Rating = doctor.Reviews.Any() ? doctor.Reviews.Average(r => r.Rate) : 0,
                     Specializations = doctor.Specializations.Select(s => new SpecializationResponse
                     {
-                        Id = s.Id,
+                        Id = s.Id.ToString(),
                         Name = s.Name,
                         Category = s.Category
                     }).ToList(),
@@ -136,7 +138,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                         Description = a.Description,
                         Organization = a.Organization,
                         Title = a.Title,
-                        Id = a.Id
+                        Id = a.Id.ToString()
                     }).ToList(),
                     Education = doctor.Educations.Select(e => new EducationResponse
                     {
@@ -144,7 +146,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                         CurrentlyStudying = e.CurrentlyStudying,
                         Degree = e.Degree,
                         EndDate = e.EndDate,
-                        Id = e.Id,
+                        Id = e.Id.ToString(),
                         Location = e.Location,
                         Major = e.Major,
                         StartDate = e.StartDate,
@@ -159,7 +161,7 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                         EndDate = e.EndDate,
                         HospitalLogo = e.HospitalLogo != null ? $"{_baseUrl}{e.HospitalLogo}" : string.Empty,
                         HospitalName = e.HospitalName,
-                        Id = e.Id,
+                        Id = e.Id.ToString(),
                         JobDescription = e.JobDescription,
                         Location = e.Location,
                         Title = e.Title
@@ -201,7 +203,8 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
                 Email = user.Email,
                 ImageUrl = user.ImageUrl,
                 PhoneNumber = user.PhoneNumber,
-                TotalYearsOfExperience = doctorQuery.Doctor.TotalYearsOfExperience,
+                TotalYearsOfExperience = doctorQuery.Experiences.Sum(exp =>
+                (exp.CurrentlyWorkingHere ? DateTime.UtcNow.Year : exp.EndDate?.Year ?? DateTime.UtcNow.Year) - exp.StartDate.Year),
                 Rating = doctorQuery.Rating,
                 Specializations = doctorQuery.Specializations,
                 AboutMe = doctorQuery.Doctor.AboutMe,

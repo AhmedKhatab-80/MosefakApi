@@ -33,11 +33,6 @@
                 .Must(specializations => specializations.Count > 0)
                 .WithMessage("At least one Specialization is required.");
 
-            RuleFor(x => x.WorkingTimes)
-                .NotNull()
-                .WithMessage("WorkingTimes cannot be null.")
-                .Must(workingTimes => workingTimes.Count > 0)
-                .WithMessage("At least one WorkingTime is required.");
 
             RuleFor(x => x.AppointmentTypes)
                 .NotNull()

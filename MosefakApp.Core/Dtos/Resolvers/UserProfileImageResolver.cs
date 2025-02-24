@@ -14,9 +14,9 @@
             if(source != null && !string.IsNullOrEmpty(source.ImagePath))
             {
                 var request = _httpContextAccessor.HttpContext?.Request;
-                var baseUrl = $"{request?.Scheme}://{request?.Host}/"; // Get Base URL dynamically
+                var baseUrl = $"{request?.Scheme}://{request?.Host}"; // Get Base URL dynamically
 
-                return $"{baseUrl}{source.ImagePath.Replace("\\", "/")}";
+                return $"{baseUrl}/images/{source.ImagePath.Replace("\\", "/")}";
             }
             return string.Empty;
         }

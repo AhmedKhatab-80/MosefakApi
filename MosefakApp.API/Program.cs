@@ -1,13 +1,11 @@
-﻿using Hangfire;
-using MosefakApp.API.Helpers;
-
-var builder = WebApplication.CreateBuilder(args);
+﻿var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
 builder.Services.OptionsPatternConfig(builder.Configuration); // belong IOptions Pattern
@@ -25,6 +23,8 @@ builder.Services.RegisterIdentityConfig();
 builder.Services.AddHttpContextAccessor();
 builder.Services.RegisterFluentValidationSettings();
 
+builder.Services.AddRepositories();
+
 // for permission based authorization
 
 builder.Services.AddTransient(typeof(IAuthorizationHandler), typeof(PermissionAuthorizationHandler));
@@ -36,7 +36,7 @@ builder.Services.AddSwaggerServices();
 
 // Call Seed Data
 
-//await builder.Services.Seeding();
+await builder.Services.Seeding();
 
 
 builder.Services.AddAuthentication(builder.Configuration);

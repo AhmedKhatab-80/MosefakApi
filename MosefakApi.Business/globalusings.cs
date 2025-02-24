@@ -69,6 +69,8 @@ global using Review = MosefakApp.Domains.Entities.Review;
 global using MosefakApp.Core.Dtos.Education.Responses;
 global using MosefakApp.Core.Dtos.Award.Responses;
 global using MosefakApp.Core.Dtos.AppointmentType.Requests;
+global using MosefakApp.Core.Dtos.Experience.Responses;
+
 
 
 

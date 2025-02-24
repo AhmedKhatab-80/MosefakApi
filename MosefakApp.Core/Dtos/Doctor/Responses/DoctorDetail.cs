@@ -14,5 +14,6 @@
         public List<AppointmentTypeResponse> AppointmentTypes { get; set; } = new();
         public List<EducationResponse> Educations { get; set; } = new();
         public List<AwardResponse> Awards { get; set; } = new();
+        public List<ExperienceResponse> Experiences { get; set; } = new();
     }
 }

@@ -26,11 +26,22 @@
 
         [HttpPut]
         [HasPermission(Permissions.EditPatientProfile)]
-        public async Task<ActionResult<UserProfileResponse>> UpdatePatientProfile([FromForm] UpdatePatientProfileRequest request)
+        public async Task<ActionResult<UserProfileResponse>> UpdatePatientProfile([FromBody] UpdatePatientProfileRequest request)
         {
             int userId = User.GetUserId();
 
             var response = await _patientService.UpdatePatientProfile(userId, request);
+
+            return Ok(response);
+        }
+
+        [HttpPost("profile/image")]
+        [HasPermission(Permissions.UploadPatientProfileImage)]
+        public async Task<ActionResult<bool>> UploadProfileImageAsync(IFormFile imageFile, CancellationToken cancellationToken = default)
+        {
+            int patientId = User.GetUserId();
+
+            var response = await _patientService.UploadProfileImageAsync(patientId, imageFile, cancellationToken);
 
             return Ok(response);
         }

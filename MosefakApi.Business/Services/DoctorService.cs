@@ -26,7 +26,7 @@
 
         public async Task<List<DoctorResponse>> GetAllDoctors()
         {
-            var doctors = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetAllAsync(includes:["Specializations"]);
+            var doctors = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetAllAsync(includes:["Experiences", "Specializations"]);
 
             if (doctors == null || !doctors.Any())
                 return new List<DoctorResponse>(); // Return an empty list instead of throwing an exception
@@ -35,7 +35,7 @@
             var appUserIds = doctors.Select(d => d.AppUserId).ToHashSet();
 
             // Fetch user details for doctors & reviewers in a **single batch request**
-            var userDetails = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetUserDetailsAsync(appUserIds);
+            var userDetails = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetUserDetailsAsync(appUserIds);
 
             // Map the results
             return doctors.Select(d => MapDoctorResponse(d, userDetails)).ToList();
@@ -44,7 +44,7 @@
 
         public async Task<DoctorDetail> GetDoctorById(int doctorId)
         {
-            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetDoctorById(doctorId);
+            var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetDoctorById(doctorId);
 
             if (doctor is null)
                 throw new ItemNotFound("Doctor is not exist");
@@ -52,7 +52,7 @@
             var reviewerIds = doctor.Reviews.Select(x => x.AppUserId).ToHashSet();
             reviewerIds.Add(doctor.AppUserId);
 
-            var userDetails = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetUserDetailsAsync(reviewerIds);
+            var userDetails = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetUserDetailsAsync(reviewerIds);
 
             // Map the results
             return MapDoctorDetailResponse(doctor, userDetails);
@@ -60,7 +60,7 @@
 
         public async Task<List<DoctorResponse>?> TopTenDoctors()
         {
-            var query = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetTopTenDoctors();
+            var query = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetTopTenDoctors();
 
             if (query is null)
                 return new List<DoctorResponse>();
@@ -82,7 +82,7 @@
 
             var doctor = _mapper.Map<Doctor>(request);
 
-            await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().AddEntityAsync(doctor);
+            await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().AddEntityAsync(doctor);
             await _unitOfWork.CommitAsync();
 
 
@@ -133,7 +133,7 @@
 
             var universityLogos = await Task.WhenAll(doctorRequest.Educations
                 .Where(e => e.UniversityLogoPath is not null)
-                .Select(async e => new { e, Path = await _imageService.UploadImageOnServer("Education", e.UniversityLogoPath, false, null!, cancellationToken) }));
+                .Select(async e => new { e, Path = await _imageService.UploadImageOnServer(e.UniversityLogoPath, false, null!, cancellationToken) }));
 
             doctor.Educations = doctorRequest.Educations?
                 .Select(e => new Education
@@ -168,7 +168,7 @@
 
         public async Task<DoctorProfileResponse> GetDoctorProfile(int appUserIdFromClaims)
         {
-            var profile = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetDoctorProfile(appUserIdFromClaims);
+            var profile = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetDoctorProfile(appUserIdFromClaims);
 
             if (profile is null)
                 return new DoctorProfileResponse();
@@ -178,121 +178,123 @@
 
         public async Task UpdateDoctorProfile(DoctorProfileUpdateRequest request, int appUserIdFromClaims, CancellationToken cancellationToken = default)
         {
-            // I Used TransactionScope beacuse EF Core doesn't Rollback for different Databases
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Now using UnitOfWork method
 
-            using var transactionScope = new TransactionScope(
-                TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
-                TransactionScopeAsyncFlowOption.Enabled
-            );
-
-            // 1) Fetch User from Identity Database
-            var user = await _userRepository.GetUserByIdAsync(appUserIdFromClaims);
-            if (user is null)
-                throw new ItemNotFound("This doctor is not registered!");
-
-            // 2) Fetch Doctor from Business Database
-            var doctorRepo = _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>();
-            var doctor = await doctorRepo.FirstOrDefaultASync(x => x.AppUserId == appUserIdFromClaims);
-            if (doctor is null)
-                throw new ItemNotFound("This profile does not exist!");
-
-            bool userUpdated = false, doctorUpdated = false;
-
-            // 3) Update User Properties (only if changed)
-            if (!string.Equals(user.FirstName, request.FirstName, StringComparison.OrdinalIgnoreCase))
+            await strategy.ExecuteAsync(async () =>
             {
-                user.FirstName = request.FirstName!;
-                userUpdated = true;
-            }
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            if (!string.Equals(user.LastName, request.LastName, StringComparison.OrdinalIgnoreCase))
-            {
-                user.LastName = request.LastName!;
-                userUpdated = true;
-            }
-
-            if (!string.Equals(user.PhoneNumber, request.PhoneNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                user.PhoneNumber = request.PhoneNumber!;
-                userUpdated = true;
-            }
-
-            if (request.DateOfBirth.HasValue && user.DateOfBirth != request.DateOfBirth)
-            {
-                user.DateOfBirth = request.DateOfBirth.Value;
-                userUpdated = true;
-            }
-
-            if (request.Gender.HasValue && user.Gender != request.Gender)
-            {
-                user.Gender = request.Gender.Value;
-                userUpdated = true;
-            }
-
-            if (request.Address != null)
-            {
-                user.Address ??= new Address();
-                if (!string.Equals(user.Address.Country, request.Address.State, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(user.Address.City, request.Address.City, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(user.Address.Street, request.Address.Street, StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    user.Address.Country = request.Address.State;
-                    user.Address.City = request.Address.City;
-                    user.Address.Street = request.Address.Street;
-                    userUpdated = true;
+                    // 1) Fetch User from Identity Database
+                    var user = await _userRepository.GetUserByIdAsync(appUserIdFromClaims);
+                    if (user is null)
+                        throw new ItemNotFound("This doctor is not registered!");
+
+                    // 2) Fetch Doctor from Business Database
+                    var doctorRepo = _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>();
+                    var doctor = await doctorRepo.FirstOrDefaultASync(x => x.AppUserId == appUserIdFromClaims);
+                    if (doctor is null)
+                        throw new ItemNotFound("This profile does not exist!");
+
+                    bool userUpdated = false, doctorUpdated = false;
+
+                    // 3) Update User Properties (only if changed)
+                    if (!string.Equals(user.FirstName, request.FirstName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        user.FirstName = request.FirstName!;
+                        userUpdated = true;
+                    }
+
+                    if (!string.Equals(user.LastName, request.LastName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        user.LastName = request.LastName!;
+                        userUpdated = true;
+                    }
+
+                    if (!string.Equals(user.PhoneNumber, request.PhoneNumber, StringComparison.OrdinalIgnoreCase))
+                    {
+                        user.PhoneNumber = request.PhoneNumber!;
+                        userUpdated = true;
+                    }
+
+                    if (request.DateOfBirth.HasValue && user.DateOfBirth != request.DateOfBirth)
+                    {
+                        user.DateOfBirth = request.DateOfBirth.Value;
+                        userUpdated = true;
+                    }
+
+                    if (request.Gender.HasValue && user.Gender != request.Gender)
+                    {
+                        user.Gender = request.Gender.Value;
+                        userUpdated = true;
+                    }
+
+                    if (request.Address != null)
+                    {
+                        user.Address ??= new Address();
+                        if (!string.Equals(user.Address.Country, request.Address.Country, StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(user.Address.City, request.Address.City, StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(user.Address.Street, request.Address.Street, StringComparison.OrdinalIgnoreCase))
+                        {
+                            user.Address.Country = request.Address.Country;
+                            user.Address.City = request.Address.City;
+                            user.Address.Street = request.Address.Street;
+                            userUpdated = true;
+                        }
+                    }
+
+                    // 4) Update Doctor Properties (only if changed)
+                    if (!string.Equals(doctor.AboutMe, request.AboutMe, StringComparison.OrdinalIgnoreCase))
+                    {
+                        doctor.AboutMe = request.AboutMe!;
+                        doctorUpdated = true;
+                    }
+
+                    if (!string.Equals(doctor.LicenseNumber, request.LicenseNumber, StringComparison.OrdinalIgnoreCase))
+                    {
+                        doctor.LicenseNumber = request.LicenseNumber!;
+                        doctorUpdated = true;
+                    }
+
+                    // 5) Save changes only if needed
+                    if (userUpdated)
+                    {
+                        await _userRepository.UpdateUser(user);
+                        var rowsAffected = await _userRepository.Save();
+                        if (rowsAffected <= 0)
+                            throw new Exception("Failed to update user profile.");
+                    }
+
+                    if (doctorUpdated)
+                    {
+                        await doctorRepo.UpdateEntityAsync(doctor);
+                        await _unitOfWork.CommitAsync();
+                    }
+
+                    await transaction.CommitAsync(); // ✅ Commit EF Transaction
+
+                    // ✅ Remove relevant cache entries after updating a doctor
+                    await RemoveCachedDoctorData(doctor.Id);
                 }
-            }
-
-            // 4) Update Doctor Properties (only if changed)
-            if (!string.Equals(doctor.AboutMe, request.AboutMe, StringComparison.OrdinalIgnoreCase))
-            {
-                doctor.AboutMe = request.AboutMe!;
-                doctorUpdated = true;
-            }
-
-            if (!string.Equals(doctor.LicenseNumber, request.LicenseNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                doctor.LicenseNumber = request.LicenseNumber!;
-                doctorUpdated = true;
-            }
-
-            try
-            {
-                // 5) Save changes only if needed
-                if (userUpdated)
+                catch (Exception ex)
                 {
-                    await _userRepository.UpdateUser(user);
-                    var rowsAffected = await _userRepository.Save();
-                    if (rowsAffected <= 0)
-                        throw new Exception("Failed to update user profile.");
+                    await transaction.RollbackAsync(); // ✅ Rollback on failure
+                    throw new Exception("Failed to update doctor profile", ex);
                 }
-
-                if (doctorUpdated)
-                {
-                    await doctorRepo.UpdateEntityAsync(doctor);
-                    await _unitOfWork.CommitAsync();
-                }
-
-                transactionScope.Complete();
-
-                // ✅ Remove relevant cache entries after updating a doctor
-                await RemoveCachedDoctorData(doctor.Id);
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Failed to update doctor profile", ex);
-            }
+            });
         }
+
+
 
         public async Task DeleteDoctor(int doctorId)
         {
-            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetByIdAsync(doctorId);
+            var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetByIdAsync(doctorId);
 
             if (doctor is null)
                 throw new ItemNotFound("Doctor is not exist");
 
-            await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().DeleteEntityAsync(doctor);
+            await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().DeleteEntityAsync(doctor);
             await _unitOfWork.CommitAsync();
 
             // ✅ Remove relevant cache entries after deleting a doctor
@@ -319,8 +321,14 @@
             var appointmentDuration = appointmentType.Duration; // Example: 30 minutes
 
             // Step 3: Fetch **All** Booked Appointments for this Doctor on Selected Day (Any Type)
-            var bookedAppointments = await _unitOfWork.Repository<Appointment>()
-                .GetAllAsync(a => a.DoctorId == doctorId && a.StartDate.DayOfWeek == selectedDay);
+            // Step 1: Fetch all appointments for the doctor (query-friendly condition)
+            var allAppointments = await _unitOfWork.Repository<Appointment>()
+                .GetAllAsync(a => a.DoctorId == doctorId);
+
+            // Step 2: Filter in memory to match the selected day
+            var bookedAppointments = allAppointments
+                .Where(a => a.StartDate.DayOfWeek == selectedDay)
+                .ToList();
 
             var bookedTimes = bookedAppointments
                 .Select(a => new
@@ -371,7 +379,7 @@
             ValidateImageFile(imageFile);
 
             // 🔹 Fetch Doctor (From Primary Database)
-            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().AnyAsync(x=> x.AppUserId == doctorId);
+            var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().AnyAsync(x=> x.AppUserId == doctorId);
             if (!doctor)
                 throw new ItemNotFound("Doctor does not exist.");
 
@@ -386,7 +394,7 @@
             try
             {
                 // 🔹 Upload New Image
-                newImagePath = await _imageService.UploadImageOnServer("Doctor", imageFile, false, oldImagePath, cancellationToken);
+                newImagePath = await _imageService.UploadImageOnServer(imageFile, false, oldImagePath, cancellationToken);
                 doctorDetails.ImagePath = newImagePath;
 
                 // 🔹 Use Transaction to Ensure Atomicity
@@ -401,7 +409,7 @@
 
                     // 🔹 Delete Old Image (Only If DB Commit is Successful)
                     if (!string.IsNullOrEmpty(oldImagePath))
-                        await _imageService.RemoveImage($"Doctor/{oldImagePath}");
+                        await _imageService.RemoveImage($"{oldImagePath}");
 
                     return true;
                 }
@@ -411,7 +419,7 @@
 
                     // 🔹 Rollback Image Upload if DB Update Fails
                     if (!string.IsNullOrEmpty(newImagePath))
-                        await _imageService.RemoveImage($"Doctor/{newImagePath}");
+                        await _imageService.RemoveImage($"{newImagePath}");
 
                     throw new BadRequest("Failed to update image.");
                 }
@@ -426,7 +434,7 @@
         public async Task<bool> UpdateWorkingTimesAsync(int doctorId, int clinicId, IEnumerable<WorkingTimeRequest> workingTimes) // [Done]
         {
             // 🔹 Fetch clinic along with WorkingTimes & Periods
-            var clinic = await _unitOfWork.GetCustomRepository<ClinicRepository>().FirstOrDefaultASync(x => x.Id == clinicId && 
+            var clinic = await _unitOfWork.GetCustomRepository<IClinicRepository>().FirstOrDefaultASync(x => x.Id == clinicId && 
                                                                                         x.Doctor.AppUserId == doctorId, ["WorkingTimes" , "WorkingTimes.Periods","Doctor"]);
 
             if (clinic is null)
@@ -505,14 +513,14 @@
                 u => new
                 {
                     FullName = $"{u.FirstName} {u.LastName}",
-                    ImagePath = _baseUrl + (string.IsNullOrWhiteSpace(u.ImagePath) ? "default.jpg" : u.ImagePath)
+                    ImagePath = _baseUrl + (string.IsNullOrWhiteSpace(u.ImagePath) ? "default.jpg" : $"{u.ImagePath}")
                 });
 
             var userIds = users.Select(x => x.Id).ToList();
 
             // 🔹 Retrieve doctor details
             var doctors = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>()
-                                           .GetAllAsync(d => userIds.Contains(d.AppUserId), ["Specializations"]);
+                                           .GetAllAsync(d => userIds.Contains(d.AppUserId), ["Specializations", "Experiences"]);
 
             // 🔹 Map the final result
             return doctors.Select(d => new DoctorResponse
@@ -523,7 +531,7 @@
                 TotalYearsOfExperience = d.TotalYearsOfExperience,
                 Specializations = d.Specializations.Select(x => new SpecializationResponse
                 {
-                    Id = x.Id,
+                    Id = x.Id.ToString(),
                     Name = x.Name,
                     Category = x.Category
                 }).ToList(),
@@ -532,12 +540,12 @@
         }
 
 
-        public async Task<IEnumerable<AppointmentDto>?> GetUpcomingAppointmentsAsync(int doctorId)
+        public async Task<List<AppointmentDto>?> GetUpcomingAppointmentsAsync(int doctorId)
         {
             return await GetAppointmentsAsync(doctorId, isUpcoming: true);
         }
 
-        public async Task<IEnumerable<AppointmentDto>?> GetPastAppointmentsAsync(int doctorId)
+        public async Task<List<AppointmentDto>?> GetPastAppointmentsAsync(int doctorId)
         {
             return await GetAppointmentsAsync(doctorId, isUpcoming: false);
         }
@@ -557,76 +565,40 @@
 
         public async Task<bool> AddSpecializationAsync(int doctorId, SpecializationRequest request)
         {
-            // 🔹 Fetch Doctor 
-            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().FirstOrDefaultASync(x=> x.AppUserId == doctorId, ["Specializations"]);
+            var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
+                .FirstOrDefaultASync(x => x.AppUserId == doctorId, ["Specializations"]);
+
             if (doctor is null)
                 throw new ItemNotFound("Doctor does not exist.");
 
-            var isSpecializationExist = doctor.Specializations.Any(x => x.DoctorId == doctor.Id && x.Name == request.Name && x.Category == request.Category);
-
-            if (isSpecializationExist)
+            if (doctor.Specializations.Any(x => x.Name == request.Name && x.Category == request.Category))
                 throw new BadRequest("Specialization already exists for this doctor.");
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            doctor.Specializations.Add(new Specialization
             {
-                doctor.Specializations.Add(new Specialization
-                {
-                    DoctorId = doctor.Id,
-                    Name = request.Name,
-                    Category = request.Category,
-                });
+                DoctorId = doctor.Id,
+                Name = request.Name,
+                Category = request.Category,
+            });
 
-                await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().UpdateEntityAsync(doctor);
-
-                var rowsAffected = await _unitOfWork.CommitAsync();
-
-                if (rowsAffected <= 0)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to add specialization.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to add specialization.", ex);
-            }
+            return await _unitOfWork.CommitAsync() > 0;
         }
+
 
         public async Task<bool> RemoveSpecializationAsync(int doctorId, int specializationId)
         {
-            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultASync(x => x.Id == specializationId &&
-                                                                                                          x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultASync(x => x.Id == specializationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
             if (specialization == null)
                 throw new ItemNotFound("Specialization is not exist");
 
-            var transaction = await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.Repository<Specialization>().DeleteEntityAsync(specialization);
+            var rowsAffected = await _unitOfWork.CommitAsync();
 
-            try
-            {
-                await _unitOfWork.Repository<Specialization>().DeleteEntityAsync(specialization);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+            if (rowsAffected <= 0)
+                throw new BadRequest("Failed to remove specialization.");
 
-                if (rowsAffected <= 0)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to remove specialization.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to remove specialization.", ex);
-            }
+            return true;
         }
 
         public async Task<bool> EditSpecializationAsync(int doctorId, int specializationId, SpecializationRequest request)
@@ -637,203 +609,189 @@
             if (specialization == null)
                 throw new ItemNotFound("Specialization is not exist");
 
-            var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            try
+            specialization.Name = request.Name;
+            specialization.Category = request.Category;
+
+            await _unitOfWork.Repository<Specialization>().UpdateEntityAsync(specialization);
+            var rowsAffected = await _unitOfWork.CommitAsync();
+
+            if (rowsAffected <= 0)
             {
-                specialization.Name = request.Name;
-                specialization.Category = request.Category;
-
-                await _unitOfWork.Repository<Specialization>().UpdateEntityAsync(specialization);
-                var rowsAffected = await _unitOfWork.CommitAsync();
-
-                if (rowsAffected <= 0)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to Edit specialization.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
+                throw new BadRequest("Failed to Edit specialization.");
             }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to Edit specialization.", ex);
-            }
+
+            return true;
         }
 
         public async Task<bool> AddExperienceAsync(int doctorId, ExperienceRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Fetch Doctor 
-            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().FirstOrDefaultASync(x => x.AppUserId == doctorId, ["Experiences"]);
-            if (doctor is null)
-                throw new ItemNotFound("Doctor does not exist.");
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            // 🔹 Step 2: Check for Duplicate Experience
-            var experienceExists = doctor.Experiences.Any(e =>
-                e.DoctorId == doctor.Id && e.Title == request.Title && e.StartDate == request.StartDate && e.EndDate == request.EndDate);
-
-            if (experienceExists)
-                throw new BadRequest("Experience already exists for this doctor.");
-
-            // 🔹 Step 3: Validate & Upload Hospital Logo (If Exists)
-            string? logoPath = null;
-            if (request.HospitalLogo is not null)
+            return await strategy.ExecuteAsync(async () =>
             {
-                ValidateImageFile(request.HospitalLogo); // 🔥 Validate File Before Upload
-                logoPath = await _imageService.UploadImageOnServer("Hospital", request.HospitalLogo, false, null!, cancellationToken);
-            }
-           
-            doctor.Experiences.Add(new Experience
-            {
-                DoctorId = doctor.Id,
-                Title = request.Title,
-                EmploymentType = request.EmploymentType,
-                CurrentlyWorkingHere = request.CurrentlyWorkingHere,
-                HospitalName = request.HospitalName,
-                EndDate = request.EndDate,
-                StartDate = request.StartDate,
-                HospitalLogo = logoPath,
-                Location = request.Location,
-                JobDescription = request.JobDescription,
+                // 🔹 Fetch Doctor 
+                var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().FirstOrDefaultASync(x => x.AppUserId == doctorId, ["Experiences"]);
+                if (doctor is null)
+                    throw new ItemNotFound("Doctor does not exist.");
+
+                // 🔹 Check for Duplicate Experience
+                var experienceExists = doctor.Experiences.Any(e =>
+                    e.DoctorId == doctor.Id && e.Title == request.Title && e.StartDate == request.StartDate && e.EndDate == request.EndDate);
+
+                if (experienceExists)
+                    throw new BadRequest("Experience already exists for this doctor.");
+
+                // 🔹 Validate & Upload Hospital Logo (If Exists)
+                string? logoPath = null;
+                if (request.HospitalLogo is not null)
+                {
+                    ValidateImageFile(request.HospitalLogo);
+                    logoPath = await _imageService.UploadImageOnServer(request.HospitalLogo, false, null!, cancellationToken);
+                }
+
+                doctor.Experiences.Add(new Experience
+                {
+                    DoctorId = doctor.Id,
+                    Title = request.Title,
+                    EmploymentType = request.EmploymentType,
+                    CurrentlyWorkingHere = request.CurrentlyWorkingHere,
+                    HospitalName = request.HospitalName,
+                    EndDate = request.EndDate,
+                    StartDate = request.StartDate,
+                    HospitalLogo = logoPath,
+                    Location = request.Location,
+                    JobDescription = request.JobDescription,
+                });
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+                try
+                {
+                    await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().UpdateEntityAsync(doctor);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to add experience.");
+
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+
+                    // 🔥 Remove uploaded image if DB transaction fails
+                    if (!string.IsNullOrEmpty(logoPath))
+                        _ = _imageService.RemoveImage(logoPath);
+
+                    throw new Exception("Failed to add experience.", ex);
+                }
             });
-
-            // 🔹 Step 5: Save to Database
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().UpdateEntityAsync(doctor);
-                var rowsAffected = await _unitOfWork.CommitAsync();
-
-                if (rowsAffected <= 0)
-                {
-                    throw new BadRequest("Failed to add experience.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-
-                // 🔥 Remove uploaded image if DB transaction fails
-                if (!string.IsNullOrEmpty(logoPath))
-                {
-                    await _imageService.RemoveImage($"Hospital/{logoPath}");
-                }
-
-                throw new Exception("Failed to add experience.", ex);
-            }
         }
+
 
         public async Task<bool> EditExperienceAsync(int doctorId, int experienceId, ExperienceRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Step 1: Ensure Experience Exists for the Given Doctor
-            var experience = await _unitOfWork.Repository<Experience>().FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (experience == null)
-                throw new ItemNotFound("Experience does not exist.");
-
-            // 🔹 Step 2: Check for Duplicate Experience Data
-            var isDuplicate = await _unitOfWork.Repository<Experience>().AnyAsync(e =>
-                e.Id != experienceId && e.DoctorId == experience.DoctorId &&
-                e.Title == request.Title && e.StartDate == request.StartDate && e.EndDate == request.EndDate);
-
-            if (isDuplicate)
-                throw new BadRequest("An experience with the same details already exists for this doctor.");
-
-            // 🔹 Step 3: Validate & Upload Hospital Logo (If Exists)
-            string? newLogoPath = null;
-            string oldLogoPath = experience.HospitalLogo ?? string.Empty;
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                if (request.HospitalLogo is not null)
+                // 🔹 Ensure Experience Exists for the Given Doctor
+                var experience = await _unitOfWork.Repository<Experience>()
+                    .FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+
+                if (experience is null)
+                    throw new ItemNotFound("Experience does not exist.");
+
+                // 🔹 Check for Duplicate Experience
+                var isDuplicate = await _unitOfWork.Repository<Experience>().AnyAsync(e =>
+                    e.Id != experienceId && e.DoctorId == experience.DoctorId &&
+                    e.Title == request.Title && e.StartDate == request.StartDate && e.EndDate == request.EndDate);
+
+                if (isDuplicate)
+                    throw new BadRequest("An experience with the same details already exists for this doctor.");
+
+                // 🔹 Validate & Upload Hospital Logo (If Exists)
+                string? newLogoPath = null;
+                string oldLogoPath = experience.HospitalLogo ?? string.Empty;
+
+                try
                 {
-                    ValidateImageFile(request.HospitalLogo); // 🔥 Validate Before Upload
-                    newLogoPath = await _imageService.UploadImageOnServer("Hospital", request.HospitalLogo, false, null!, cancellationToken);
+                    if (request.HospitalLogo is not null)
+                    {
+                        ValidateImageFile(request.HospitalLogo);
+                        newLogoPath = await _imageService.UploadImageOnServer(request.HospitalLogo, false, null!, cancellationToken);
+                    }
+
+                    // 🔹 Update Experience Entity
+                    experience.Title = request.Title;
+                    experience.EmploymentType = request.EmploymentType;
+                    experience.CurrentlyWorkingHere = request.CurrentlyWorkingHere;
+                    experience.HospitalName = request.HospitalName;
+                    experience.EndDate = request.EndDate;
+                    experience.StartDate = request.StartDate;
+                    experience.HospitalLogo = newLogoPath ?? oldLogoPath;
+                    experience.Location = request.Location;
+                    experience.JobDescription = request.JobDescription;
+
+                    await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+                    await _unitOfWork.Repository<Experience>().UpdateEntityAsync(experience);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to edit experience.");
+
+                    await transaction.CommitAsync();
+
+                    // 🔹 Remove Old Image After Successful Update
+                    if (!string.IsNullOrEmpty(newLogoPath) && !string.IsNullOrEmpty(oldLogoPath) && newLogoPath != oldLogoPath)
+                        _ = _imageService.RemoveImage(oldLogoPath);
+
+                    return true;
                 }
-
-                // 🔹 Step 4: Update Experience Entity
-                experience.Title = request.Title;
-                experience.EmploymentType = request.EmploymentType;
-                experience.CurrentlyWorkingHere = request.CurrentlyWorkingHere;
-                experience.HospitalName = request.HospitalName;
-                experience.EndDate = request.EndDate;
-                experience.StartDate = request.StartDate;
-                experience.HospitalLogo = newLogoPath ?? oldLogoPath; // Keep old logo if no new one is uploaded
-                experience.Location = request.Location;
-                experience.JobDescription = request.JobDescription;
-
-                using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-                await _unitOfWork.Repository<Experience>().UpdateEntityAsync(experience);
-                var rowsAffected = await _unitOfWork.CommitAsync();
-
-                if (rowsAffected <= 0)
+                catch (Exception ex)
                 {
-                    await transaction.RollbackAsync();
+                    await _unitOfWork.RollbackTransactionAsync();
 
-                    // 🔥 Remove uploaded new image if DB commit fails
+                    // 🔥 Remove new image if an error occurred
                     if (!string.IsNullOrEmpty(newLogoPath))
-                        await _imageService.RemoveImage($"Hospital/{newLogoPath}");
+                        _ = _imageService.RemoveImage(newLogoPath);
 
-                    throw new BadRequest("Failed to edit experience.");
+                    throw new Exception("Failed to edit experience.", ex);
                 }
-
-                await transaction.CommitAsync();
-
-                // 🔹 Step 5: Remove Old Image Only After Successful Update
-                if (!string.IsNullOrEmpty(newLogoPath) && !string.IsNullOrEmpty(oldLogoPath) && newLogoPath != oldLogoPath)
-                    await _imageService.RemoveImage($"Hospital/{oldLogoPath}");
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                // 🔥 Ensure Transaction is Rolled Back on Exception
-                await _unitOfWork.RollbackTransactionAsync();
-
-                // 🔥 Remove new image if an error occurred
-                if (!string.IsNullOrEmpty(newLogoPath))
-                    await _imageService.RemoveImage($"Hospital/{newLogoPath}");
-
-                throw new Exception("Failed to edit experience.", ex);
-            }
+            });
         }
+
 
         public async Task<bool> RemoveExperienceAsync(int doctorId, int experienceId)
         {
-            var experience = await _unitOfWork.Repository<Experience>().FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (experience == null)
-                throw new ItemNotFound("experience is not exist");
-
-            var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                await _unitOfWork.Repository<Experience>().DeleteEntityAsync(experience);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                var experience = await _unitOfWork.Repository<Experience>()
+                    .FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
-                if (rowsAffected <= 0)
+                if (experience is null)
+                    throw new ItemNotFound("Experience does not exist.");
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+                try
+                {
+                    await _unitOfWork.Repository<Experience>().DeleteEntityAsync(experience);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to remove experience.");
+
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to remove Experience.");
+                    throw new Exception("Failed to remove experience.", ex);
                 }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to remove Experience.", ex);
-            }
+            });
         }
+
 
         public async Task<bool> AddAwardAsync(int doctorId, AwardRequest request, CancellationToken cancellationToken = default)
         {
@@ -867,9 +825,8 @@
                 Title = request.Title.Trim(),
                 Description = request.Description?.Trim(),
                 Organization = request.Organization.Trim(),
+                DateReceived = request.DateReceived
             };
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
 
             try
             {
@@ -878,16 +835,13 @@
 
                 if (rowsAffected <= 0)
                 {
-                    await transaction.RollbackAsync();
                     throw new BadRequest("Failed to add award.");
                 }
 
-                await transaction.CommitAsync();
                 return true;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
                 throw new Exception("Failed to add award.", ex);
             }
         }
@@ -912,6 +866,7 @@
                 a.DoctorId == award.DoctorId &&
                 a.Title.ToLower() == normalizedTitle &&
                 a.Organization.ToLower() == normalizedOrganization &&
+                a.DateReceived == award.DateReceived &&
                 (a.Description == null || a.Description.ToLower() == normalizedDescription));
 
             if (isDuplicate)
@@ -921,28 +876,15 @@
             award.Title = request.Title.Trim();
             award.Description = request.Description?.Trim();
             award.Organization = request.Organization.Trim();
+            award.DateReceived = request.DateReceived;
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.Repository<Award>().UpdateEntityAsync(award);
+            var rowsAffected = await _unitOfWork.CommitAsync();
 
-            try
-            {
-                await _unitOfWork.Repository<Award>().UpdateEntityAsync(award);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+            if (rowsAffected <= 0)
+                throw new BadRequest("Failed to update award.");
 
-                if (rowsAffected <= 0)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to update award.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to update award.", ex);
-            }
+            return true;
         }
 
 
@@ -954,456 +896,469 @@
             if (award == null)
                 throw new ItemNotFound("Award does not exist or does not belong to this doctor.");
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.Repository<Award>().DeleteEntityAsync(award);
+            var rowsAffected = await _unitOfWork.CommitAsync();
 
-            try
-            {
-                await _unitOfWork.Repository<Award>().DeleteEntityAsync(award);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+            if (rowsAffected <= 0)
+                throw new BadRequest("Failed to delete award.");
 
-                if (rowsAffected <= 0)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to delete award.");
-                }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to delete award.", ex);
-            }
+            return true;
         }
 
 
         public async Task<bool> AddEducationAsync(int doctorId, EducationRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Step 1: Ensure Doctor Exists
-            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
-            if (doctor is null)
-                throw new ItemNotFound("Doctor does not exist.");
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            // 🔹 Step 2: Check for Duplicate Education Entry
-            var isDuplicated = await _unitOfWork.Repository<Education>().AnyAsync(x =>
-                x.DoctorId == doctor.Id &&
-                x.UniversityName == request.UniversityName &&
-                x.Degree == request.Degree &&
-                x.StartDate == request.StartDate &&
-                x.Major == request.Major &&
-                x.Location == request.Location);
-
-            if (isDuplicated)
-                throw new ItemAlreadyExist("This education record already exists.");
-
-            string? newImagePath = null;
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                // 🔹 Step 3: Upload University Logo (if provided)
-                if (request.UniversityLogoPath is not null)
-                    newImagePath = await _imageService.UploadImageOnServer("Education", request.UniversityLogoPath, false, null!, cancellationToken);
+                // 🔹 Step 1: Ensure Doctor Exists
+                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+                if (doctor is null)
+                    throw new ItemNotFound("Doctor does not exist.");
 
-                // 🔹 Step 4: Create & Add New Education Entry
-                var education = new Education
+                // 🔹 Step 2: Check for Duplicate Education Entry
+                var isDuplicated = await _unitOfWork.Repository<Education>().AnyAsync(x =>
+                    x.DoctorId == doctor.Id &&
+                    x.UniversityName == request.UniversityName &&
+                    x.Degree == request.Degree &&
+                    x.StartDate == request.StartDate &&
+                    x.Major == request.Major &&
+                    x.Location == request.Location);
+
+                if (isDuplicated)
+                    throw new ItemAlreadyExist("This education record already exists.");
+
+                string? newImagePath = null;
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
+
+                try
                 {
-                    DoctorId = doctor.Id,
-                    UniversityName = request.UniversityName.Trim(),
-                    Degree = request.Degree.Trim(),
-                    Major = request.Major?.Trim()!,
-                    StartDate = request.StartDate,
-                    EndDate = request.EndDate,
-                    CurrentlyStudying = request.CurrentlyStudying,
-                    Location = request.Location?.Trim()!,
-                    AdditionalNotes = request.AdditionalNotes?.Trim(),
-                    UniversityLogoPath = newImagePath
-                };
+                    // 🔹 Step 3: Upload University Logo (if provided)
+                    if (request.UniversityLogoPath is not null)
+                        newImagePath = await _imageService.UploadImageOnServer(request.UniversityLogoPath, false, null!, cancellationToken);
 
-                await _unitOfWork.Repository<Education>().AddEntityAsync(education);
+                    // 🔹 Step 4: Create & Add New Education Entry
+                    var education = new Education
+                    {
+                        DoctorId = doctor.Id,
+                        UniversityName = request.UniversityName.Trim(),
+                        Degree = request.Degree.Trim(),
+                        Major = request.Major?.Trim(),
+                        StartDate = request.StartDate,
+                        EndDate = request.EndDate,
+                        CurrentlyStudying = request.CurrentlyStudying,
+                        Location = request.Location?.Trim(),
+                        AdditionalNotes = request.AdditionalNotes?.Trim(),
+                        UniversityLogoPath = newImagePath
+                    };
 
-                var rowsAffected = await _unitOfWork.CommitAsync();
-                if (rowsAffected <= 0)
-                    throw new BadRequest("Failed to add education.");
+                    await _unitOfWork.Repository<Education>().AddEntityAsync(education);
 
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to add education.");
 
-                // 🔹 Step 5: Remove Uploaded Image If Transaction Fails
-                if (!string.IsNullOrEmpty(newImagePath))
-                {
-                    await _imageService.RemoveImage($"Education/{newImagePath}");
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
 
-                throw new Exception("Failed to add education.", ex);
-            }
+                    // 🔹 Step 5: Remove Uploaded Image If Transaction Fails
+                    if (!string.IsNullOrEmpty(newImagePath))
+                        _ = _imageService.RemoveImage(newImagePath); // Fire & Forget
+
+                    throw new Exception("Failed to add education.", ex);
+                }
+            });
         }
+
 
 
         public async Task<bool> EditEducationAsync(int doctorId, int educationId, EducationRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Step 1: Ensure Education Exists & Belongs to Doctor
-            var education = await _unitOfWork.Repository<Education>().FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
-            if (education is null)
-                throw new ItemNotFound("Education record does not exist or you have no permission.");
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            string oldImagePath = education.UniversityLogoPath ?? string.Empty;
-            string? newImagePath = null;
-
-            // 🔹 Step 2: Upload New Image (if provided)
-            if (request.UniversityLogoPath != null)
-                newImagePath = await _imageService.UploadImageOnServer("Education", request.UniversityLogoPath, false, oldImagePath, cancellationToken);
-
-            // 🔹 Step 3: Update Education Entity
-            education.StartDate = request.StartDate;
-            education.EndDate = request.EndDate;
-            education.Location = request.Location?.Trim()!;
-            education.AdditionalNotes = request.AdditionalNotes?.Trim();
-            education.CurrentlyStudying = request.CurrentlyStudying;
-            education.Degree = request.Degree.Trim();
-            education.Major = request.Major?.Trim()!;
-            education.UniversityName = request.UniversityName.Trim();
-            education.UniversityLogoPath = newImagePath ?? oldImagePath;
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                await _unitOfWork.Repository<Education>().UpdateEntityAsync(education);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                // 🔹 Step 1: Ensure Education Exists & Belongs to Doctor
+                var education = await _unitOfWork.Repository<Education>()
+                    .FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
-                if (rowsAffected <= 0)
-                    throw new BadRequest("Failed to edit Education.");
+                if (education is null)
+                    throw new ItemNotFound("Education record does not exist or you have no permission.");
 
-                await transaction.CommitAsync(cancellationToken);
+                string oldImagePath = education.UniversityLogoPath ?? string.Empty;
+                string? newImagePath = null;
 
-                // 🔹 Step 4: Remove Old Image Only After Successful Update
-                if (!string.IsNullOrEmpty(newImagePath) && !string.IsNullOrEmpty(oldImagePath) && newImagePath != oldImagePath)
+                // 🔹 Step 2: Upload New Image (if provided)
+                if (request.UniversityLogoPath != null)
+                    newImagePath = await _imageService.UploadImageOnServer(request.UniversityLogoPath, false, oldImagePath, cancellationToken);
+
+                // 🔹 Step 3: Update Education Entity
+                education.StartDate = request.StartDate;
+                education.EndDate = request.EndDate;
+                education.Location = request.Location?.Trim();
+                education.AdditionalNotes = request.AdditionalNotes?.Trim();
+                education.CurrentlyStudying = request.CurrentlyStudying;
+                education.Degree = request.Degree.Trim();
+                education.Major = request.Major?.Trim();
+                education.UniversityName = request.UniversityName.Trim();
+                education.UniversityLogoPath = newImagePath ?? oldImagePath;
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
+
+                try
                 {
-                    await _imageService.RemoveImage($"Education/{oldImagePath}");
+                    await _unitOfWork.Repository<Education>().UpdateEntityAsync(education);
+
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to edit Education.");
+
+                    await transaction.CommitAsync(cancellationToken);
+
+                    // 🔹 Step 4: Remove Old Image Only After Successful Update
+                    if (!string.IsNullOrEmpty(newImagePath) && !string.IsNullOrEmpty(oldImagePath) && newImagePath != oldImagePath)
+                    {
+                        _ = _imageService.RemoveImage(oldImagePath); // Fire & Forget
+                    }
+
+                    return true;
                 }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-
-                // 🔥 Remove newly uploaded image if the transaction fails
-                if (!string.IsNullOrEmpty(newImagePath))
+                catch (Exception ex)
                 {
-                    await _imageService.RemoveImage($"Education/{newImagePath}");
-                }
+                    await transaction.RollbackAsync(cancellationToken);
 
-                throw new Exception("Failed to edit Education.", ex);
-            }
+                    // 🔥 Remove newly uploaded image if the transaction fails
+                    if (!string.IsNullOrEmpty(newImagePath))
+                        _ = _imageService.RemoveImage(newImagePath); // Fire & Forget
+
+                    throw new Exception("Failed to edit Education.", ex);
+                }
+            });
         }
+
 
 
         public async Task<bool> RemoveEducationAsync(int doctorId, int educationId)
         {
-            var education = await _unitOfWork.Repository<Education>().FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
-            
-            if (education is null)
-                throw new ItemNotFound("Doctor does not exist or you have no permission.");
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                await _unitOfWork.Repository<Education>().DeleteEntityAsync(education);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                // 🔹 Step 1: Ensure Education Exists & Belongs to Doctor
+                var education = await _unitOfWork.Repository<Education>()
+                    .FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
-                if (rowsAffected <= 0)
+                if (education is null)
+                    throw new ItemNotFound("Doctor does not exist or you have no permission.");
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
+
+                try
+                {
+                    await _unitOfWork.Repository<Education>().DeleteEntityAsync(education);
+
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to delete education.");
+
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    throw new BadRequest("Failed to delete education.");
+                    throw new Exception("Failed to delete education.", ex);
                 }
-
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to delete education.", ex);
-            }
+            });
         }
+
 
         public async Task<bool> AddClinicAsync(int doctorId, ClinicRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Step 1: Ensure Doctor Exists
-            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
-            if (doctor is null)
-                throw new ItemNotFound("Doctor does not exist.");
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            // 🔹 Step 2: Check Duplication
-            var isDuplicated = await _unitOfWork.Repository<Clinic>().AnyAsync(
-                x => x.Street.Trim().ToLower() == request.Street.Trim().ToLower() &&
-                     x.City.Trim().ToLower() == request.City.Trim().ToLower() &&
-                     x.Country.Trim().ToLower() == request.Country.Trim().ToLower() &&
-                     x.DoctorId == doctor.Id &&
-                     x.Name.Trim().ToLower() == request.Name.Trim().ToLower() &&
-                     x.PhoneNumber.Trim() == request.PhoneNumber.Trim());
-
-            if (isDuplicated)
-                throw new ItemAlreadyExist("Clinic already exists.");
-
-            string? clinicNewPath = null;
-            string? clinicNewLogoPath = null;
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                // 🔹 Step 3: Upload Images (If Provided)
-                if (request.ClinicImage != null)
+                // 🔹 Step 1: Ensure Doctor Exists
+                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+                if (doctor is null)
+                    throw new ItemNotFound("Doctor does not exist.");
+
+                // 🔹 Step 2: Check Duplication
+                var isDuplicated = await _unitOfWork.Repository<Clinic>().AnyAsync(
+                    x => x.Street.Trim().ToLower() == request.Street.Trim().ToLower() &&
+                         x.City.Trim().ToLower() == request.City.Trim().ToLower() &&
+                         x.Country.Trim().ToLower() == request.Country.Trim().ToLower() &&
+                         x.DoctorId == doctor.Id &&
+                         x.Name.Trim().ToLower() == request.Name.Trim().ToLower() &&
+                         x.PhoneNumber.Trim() == request.PhoneNumber.Trim());
+
+                if (isDuplicated)
+                    throw new ItemAlreadyExist("Clinic already exists.");
+
+                string? clinicNewPath = null;
+                string? clinicNewLogoPath = null;
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
+
+                try
                 {
-                    clinicNewPath = await _imageService.UploadImageOnServer("Clinic", request.ClinicImage, false, null!, cancellationToken);
+                    // 🔹 Step 3: Upload Images (If Provided)
+                    if (request.ClinicImage != null)
+                        clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, null!, cancellationToken);
+
+                    if (request.LogoPath != null)
+                        clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, null!, cancellationToken);
+
+                    // 🔹 Step 4: Create Clinic Entity
+                    var clinic = new Clinic
+                    {
+                        DoctorId = doctor.Id,
+                        Name = request.Name.Trim(),
+                        Street = request.Street.Trim(),
+                        City = request.City.Trim(),
+                        Country = request.Country.Trim(),
+                        ApartmentOrSuite = request.ApartmentOrSuite?.Trim(),
+                        Landmark = request.Landmark?.Trim(),
+                        PhoneNumber = request.PhoneNumber.Trim(),
+                        LogoPath = clinicNewLogoPath,
+                        ClinicImage = clinicNewPath,
+                        WorkingTimes = request.WorkingTimes
+                            .Select(w => new WorkingTime
+                            {
+                                Day = w.Day,
+                                Periods = w.Periods
+                                    .Select(p => new Period
+                                    {
+                                        StartTime = p.StartTime,
+                                        EndTime = p.EndTime,
+                                    })
+                                    .ToList()
+                            })
+                            .ToList(),
+                    };
+
+                    await _unitOfWork.Repository<Clinic>().AddEntityAsync(clinic);
+
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to add clinic.");
+
+                    await transaction.CommitAsync(cancellationToken);
+
+                    return true;
                 }
-
-                if (request.LogoPath != null)
+                catch (DbUpdateException dbEx)
                 {
-                    clinicNewLogoPath = await _imageService.UploadImageOnServer("Clinic", request.LogoPath, false, null!, cancellationToken);
+                    await transaction.RollbackAsync(cancellationToken);
+
+                    // 🔥 Remove uploaded images if transaction fails
+                    if (!string.IsNullOrEmpty(clinicNewLogoPath))
+                        _ = _imageService.RemoveImage(clinicNewLogoPath); // Fire & Forget
+
+                    if (!string.IsNullOrEmpty(clinicNewPath))
+                        _ = _imageService.RemoveImage(clinicNewPath); // Fire & Forget
+
+                    throw new Exception("Database error occurred while adding clinic.", dbEx);
                 }
-
-                // 🔹 Step 4: Create Clinic Entity
-                var clinic = new Clinic
+                catch (Exception ex)
                 {
-                    DoctorId = doctor.Id,
-                    Name = request.Name.Trim(),
-                    Street = request.Street.Trim(),
-                    City = request.City.Trim(),
-                    Country = request.Country.Trim(),
-                    ApartmentOrSuite = request.ApartmentOrSuite?.Trim()!,
-                    Landmark = request.Landmark?.Trim()!,
-                    PhoneNumber = request.PhoneNumber.Trim(),
-                    LogoPath = clinicNewLogoPath,
-                    ClinicImage = clinicNewPath, 
-                    WorkingTimes = request.WorkingTimes
-                        .Select(w => new WorkingTime
-                        {
-                            Day = w.Day,
-                            Periods = w.Periods
-                                .Select(p => new Period
-                                {
-                                    StartTime = p.StartTime,
-                                    EndTime = p.EndTime,
-                                })
-                                .ToList()
-                        })
-                        .ToList(),
-                };
+                    await transaction.RollbackAsync(cancellationToken);
 
-                await _unitOfWork.Repository<Clinic>().AddEntityAsync(clinic);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                    if (!string.IsNullOrEmpty(clinicNewLogoPath))
+                        _ = _imageService.RemoveImage(clinicNewLogoPath); // Fire & Forget
 
-                if (rowsAffected <= 0)
-                    throw new BadRequest("Failed to add clinic.");
+                    if (!string.IsNullOrEmpty(clinicNewPath))
+                        _ = _imageService.RemoveImage(clinicNewPath); // Fire & Forget
 
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (DbUpdateException dbEx)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-
-                // 🔹 Step 5: Remove Uploaded Image If Transaction Fails
-                if (!string.IsNullOrEmpty(clinicNewLogoPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewLogoPath}");
-
-                if (!string.IsNullOrEmpty(clinicNewPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewPath}");
-
-                throw new Exception("Database error occurred while adding clinic.", dbEx);
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-
-                if (!string.IsNullOrEmpty(clinicNewLogoPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewLogoPath}");
-
-                if (!string.IsNullOrEmpty(clinicNewPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewPath}");
-
-                throw new Exception("Failed to add clinic.", ex);
-            }
+                    throw new Exception("Failed to add clinic.", ex);
+                }
+            });
         }
+
 
 
         public async Task<bool> EditClinicAsync(int doctorId, int clinicId, ClinicRequest request, CancellationToken cancellationToken = default)
         {
-            // 🔹 Step 1: Retrieve Clinic with Related Entities
-            var clinic = await _unitOfWork.Repository<Clinic>().FirstOrDefaultASync(
-                x => x.Id == clinicId && x.Doctor.AppUserId == doctorId,
-                includes: ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]
-            );
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (clinic is null)
-                throw new ItemNotFound("Clinic does not exist or you have no permission.");
-
-            // 🔹 Step 2: Normalize Input & Check for Duplicates
-            var normalizedStreet = request.Street.Trim().ToLower();
-            var normalizedCity = request.City.Trim().ToLower();
-            var normalizedCountry = request.Country.Trim().ToLower();
-            var normalizedName = request.Name.Trim().ToLower();
-            var normalizedPhone = request.PhoneNumber.Trim();
-
-            var isDuplicated = await _unitOfWork.Repository<Clinic>().AnyAsync(
-                x => x.Id != clinicId && // Exclude the current clinic
-                     x.Street.Trim().ToLower() == normalizedStreet &&
-                     x.City.Trim().ToLower() == normalizedCity &&
-                     x.Country.Trim().ToLower() == normalizedCountry &&
-                     x.DoctorId == clinic.DoctorId &&
-                     x.Name.Trim().ToLower() == normalizedName &&
-                     x.PhoneNumber.Trim() == normalizedPhone
-            );
-
-            if (isDuplicated)
-                throw new ItemAlreadyExist("Clinic already exists.");
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            string? clinicNewPath = null;
-            string? clinicNewLogoPath = null;
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-               
-                // 🔹 Step 3: Upload Images (Only if a New Image is Provided)
-                if (request.ClinicImage != null)
+                // 🔹 Step 1: Retrieve Clinic with Related Entities
+                var clinic = await _unitOfWork.Repository<Clinic>().FirstOrDefaultASync(
+                    x => x.Id == clinicId && x.Doctor.AppUserId == doctorId,
+                    includes: ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]
+                );
+
+                if (clinic is null)
+                    throw new ItemNotFound("Clinic does not exist or you have no permission.");
+
+                // 🔹 Step 2: Normalize Input & Check for Duplicates
+                var normalizedStreet = request.Street.Trim().ToLower();
+                var normalizedCity = request.City.Trim().ToLower();
+                var normalizedCountry = request.Country.Trim().ToLower();
+                var normalizedName = request.Name.Trim().ToLower();
+                var normalizedPhone = request.PhoneNumber.Trim();
+
+                var isDuplicated = await _unitOfWork.Repository<Clinic>().AnyAsync(
+                    x => x.Id != clinicId && // Exclude the current clinic
+                         x.Street.Trim().ToLower() == normalizedStreet &&
+                         x.City.Trim().ToLower() == normalizedCity &&
+                         x.Country.Trim().ToLower() == normalizedCountry &&
+                         x.DoctorId == clinic.DoctorId &&
+                         x.Name.Trim().ToLower() == normalizedName &&
+                         x.PhoneNumber.Trim() == normalizedPhone
+                );
+
+                if (isDuplicated)
+                    throw new ItemAlreadyExist("Clinic already exists.");
+
+                string? clinicNewPath = null;
+                string? clinicNewLogoPath = null;
+
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
+
+                try
                 {
-                    clinicNewPath = await _imageService.UploadImageOnServer("Clinic", request.ClinicImage, false, clinic.ClinicImage!, cancellationToken);
-                }
+                    // 🔹 Step 3: Upload Images (Only if a New Image is Provided)
+                    if (request.ClinicImage != null)
+                        clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, clinic.ClinicImage!, cancellationToken);
 
-                if (request.LogoPath != null)
-                {
-                    clinicNewLogoPath = await _imageService.UploadImageOnServer("Clinic", request.LogoPath, false, clinic.LogoPath!, cancellationToken);
-                }
+                    if (request.LogoPath != null)
+                        clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, clinic.LogoPath!, cancellationToken);
 
-                // 🔹 Step 4: Update Clinic Fields
-                clinic.Name = request.Name;
-                clinic.Street = request.Street;
-                clinic.City = request.City;
-                clinic.Country = request.Country;
-                clinic.Landmark = request.Landmark;
-                clinic.PhoneNumber = request.PhoneNumber;
-                clinic.ApartmentOrSuite = request.ApartmentOrSuite;
-                clinic.ClinicImage = clinicNewPath ?? clinic.ClinicImage;
-                clinic.LogoPath = clinicNewLogoPath ?? clinic.LogoPath;
+                    // 🔹 Step 4: Update Clinic Fields
+                    clinic.Name = request.Name.Trim();
+                    clinic.Street = request.Street.Trim();
+                    clinic.City = request.City.Trim();
+                    clinic.Country = request.Country.Trim();
+                    clinic.Landmark = request.Landmark?.Trim();
+                    clinic.PhoneNumber = request.PhoneNumber.Trim();
+                    clinic.ApartmentOrSuite = request.ApartmentOrSuite?.Trim();
+                    clinic.ClinicImage = clinicNewPath ?? clinic.ClinicImage;
+                    clinic.LogoPath = clinicNewLogoPath ?? clinic.LogoPath;
 
-                // 🔹 Step 5: Update Working Times (If Provided)
-                if (request.WorkingTimes.Any())
-                {
-                    clinic.WorkingTimes.Clear();
-
-                    foreach (var w in request.WorkingTimes)
+                    // 🔹 Step 5: Update Working Times (If Provided)
+                    if (request.WorkingTimes.Any())
                     {
-                        clinic.WorkingTimes.Add(new WorkingTime()
+                        clinic.WorkingTimes.Clear();
+                        
+                        foreach (var w in request.WorkingTimes)
                         {
-                            Day = w.Day,
-                            Periods = w.Periods.Select(p => new Period
+                            clinic.WorkingTimes.Add(new WorkingTime()
                             {
-                                StartTime = p.StartTime,
-                                EndTime = p.EndTime,
-                            }).ToList()
-                        });
+                                Day = w.Day,
+                                Periods = w.Periods.Select(p => new Period
+                                {
+                                    StartTime = p.StartTime,
+                                    EndTime = p.EndTime,
+                                }).ToList()
+                            });
+                        }
                     }
+
+                    await _unitOfWork.Repository<Clinic>().UpdateEntityAsync(clinic);
+
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to edit clinic.");
+
+                    await transaction.CommitAsync(cancellationToken);
+
+                    // 🔹 Step 6: Remove Old Images Only After Successful Update
+                    if (!string.IsNullOrEmpty(clinicNewLogoPath) && clinicNewLogoPath != clinic.LogoPath)
+                        _ = _imageService.RemoveImage(clinic.LogoPath); // Fire & Forget
+
+                    if (!string.IsNullOrEmpty(clinicNewPath) && clinicNewPath != clinic.ClinicImage)
+                        _ = _imageService.RemoveImage(clinic.ClinicImage); // Fire & Forget
+
+                    return true;
                 }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
 
-                await _unitOfWork.Repository<Clinic>().UpdateEntityAsync(clinic);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                    // 🔥 Remove newly uploaded images if the transaction fails
+                    if (!string.IsNullOrEmpty(clinicNewLogoPath))
+                        _ = _imageService.RemoveImage(clinicNewLogoPath); // Fire & Forget
 
-                if (rowsAffected <= 0)
-                    throw new BadRequest("Failed to edit clinic.");
+                    if (!string.IsNullOrEmpty(clinicNewPath))
+                        _ = _imageService.RemoveImage(clinicNewPath); // Fire & Forget
 
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-
-                // 🔹 Step 6: Remove Uploaded Images If Transaction Fails
-                if (!string.IsNullOrEmpty(clinicNewLogoPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewLogoPath}");
-
-                if (!string.IsNullOrEmpty(clinicNewPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicNewPath}");
-
-                throw new Exception("Failed to edit clinic.", ex);
-            }
+                    throw new Exception("Failed to edit clinic.", ex);
+                }
+            });
         }
+
 
 
         public async Task<bool> RemoveClinicAsync(int doctorId, int clinicId)
         {
-            // 🔹 Step 1: Retrieve the Clinic
-            var clinic = await _unitOfWork.Repository<Clinic>().FirstOrDefaultASync(x => x.Id == clinicId && x.Doctor.Id == doctorId, ["Doctor"]);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (clinic is null)
-                throw new ItemNotFound("Clinic does not exist or you have no permission.");
-
-            var clinicImagePath = clinic.ClinicImage;
-            var clinicLogoPath = clinic.LogoPath;
-
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                // 🔹 Step 2: Remove the Clinic
-                await _unitOfWork.Repository<Clinic>().DeleteEntityAsync(clinic);
-                var rowsAffected = await _unitOfWork.CommitAsync();
+                // 🔹 Step 1: Retrieve the Clinic
+                var clinic = await _unitOfWork.Repository<Clinic>()
+                    .FirstOrDefaultASync(x => x.Id == clinicId && x.Doctor.Id == doctorId, ["Doctor"]);
 
-                if (rowsAffected <= 0)
-                    throw new BadRequest("Failed to remove clinic.");
+                if (clinic is null)
+                    throw new ItemNotFound("Clinic does not exist or you have no permission.");
 
-                await transaction.CommitAsync();
+                var clinicImagePath = clinic.ClinicImage;
+                var clinicLogoPath = clinic.LogoPath;
 
-                // 🔹 Step 3: Remove Images After Successful Deletion
-                if (!string.IsNullOrEmpty(clinicImagePath))
-                    await _imageService.RemoveImage($"Clinic/{clinicImagePath}");
+                await using var transaction = await _unitOfWork.BeginTransactionAsync(); // ✅ Transaction Handling
 
-                if (!string.IsNullOrEmpty(clinicLogoPath))
-                    await _imageService.RemoveImage($"Clinic/{clinicLogoPath}");
+                try
+                {
+                    // 🔹 Step 2: Remove the Clinic
+                    await _unitOfWork.Repository<Clinic>().DeleteEntityAsync(clinic);
 
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Failed to remove clinic.", ex);
-            }
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new BadRequest("Failed to remove clinic.");
+
+                    await transaction.CommitAsync();
+
+                    // 🔹 Step 3: Remove Images After Successful Deletion
+                    if (!string.IsNullOrEmpty(clinicImagePath))
+                        _ = _imageService.RemoveImage(clinicImagePath); // Fire & Forget
+
+                    if (!string.IsNullOrEmpty(clinicLogoPath))
+                        _ = _imageService.RemoveImage(clinicLogoPath); // Fire & Forget
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw new Exception("Failed to remove clinic.", ex);
+                }
+            });
         }
 
 
         public async Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId)
         {
             var clinics = await _unitOfWork.Repository<Clinic>()
-                                           .GetAllAsync(c => c.Doctor.AppUserId == doctorId, ["WorkingTimes", "WorkingTimes.Periods","Doctor"]);
+                .GetAllAsync(c => c.DoctorId == doctorId, ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
 
-            return (List<ClinicResponse>)(clinics?.Any() == true ? _mapper.Map<List<ClinicResponse>>(clinics) : Enumerable.Empty<ClinicResponse>());
+            return clinics?.Count > 0 ? _mapper.Map<List<ClinicResponse>>(clinics.ToList()) : new List<ClinicResponse>();
         }
+
 
         public async Task<List<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId)
         {
             var reviews = await _unitOfWork.Repository<Review>().GetAllAsync(r => r.DoctorId == doctorId);
 
-            return (List<ReviewResponse>)(reviews?.Any() == true ? _mapper.Map<List<ReviewResponse>>(reviews) : Enumerable.Empty<ReviewResponse>());
+            return (reviews?.Count > 0 ? _mapper.Map<List<ReviewResponse>>(reviews.ToList()) : new List<ReviewResponse>());
         }
 
         public async Task<double> GetAverageRatingAsync(int doctorId)
         {
             return await _unitOfWork.Repository<Review>().GetAverage(r => r.Rate, r => r.DoctorId == doctorId);
         }
-
 
         public async Task<long> GetTotalPatientsServedAsync(int doctorId)
         {
@@ -1415,6 +1370,56 @@
             // 🔹 Step 2: Query Efficiently Using Indexed Columns
             return await _unitOfWork.Repository<Appointment>().GetCountWithConditionAsync(
                 x => x.DoctorId == doctor.Id && x.AppointmentStatus == AppointmentStatus.Completed);
+        }
+
+        public async Task<List<SpecializationResponse>?> GetSpecializations(int doctorId)
+        {
+            var query = await _unitOfWork.Repository<Specialization>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+
+            if (query is null)
+                return null;
+
+            var response = _mapper.Map<List<SpecializationResponse>>(query);
+
+            return response;
+        }
+
+        public async Task<List<ExperienceResponse>?> GetExperiences(int doctorId)
+        {
+            var query = await _unitOfWork.Repository<Experience>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+
+            if (query is null)
+                return null;
+
+            var response = _mapper.Map<List<ExperienceResponse>>(query);
+            response.ForEach(ex => ex.HospitalLogo = !string.IsNullOrEmpty(ex.HospitalLogo) ? $"{_baseUrl}{ex.HospitalLogo}" : $"{_baseUrl}default.jpg");
+
+            return response;
+        }
+
+        public async Task<List<AwardResponse>?> GetAwards(int doctorId)
+        {
+            var query = await _unitOfWork.Repository<Award>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+
+            if (query is null)
+                return null;
+
+            var response = _mapper.Map<List<AwardResponse>>(query);
+
+            return response;
+        }
+
+        public async Task<List<EducationResponse>?> GetEducations(int doctorId)
+        {
+            var query = await _unitOfWork.Repository<Education>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+
+            if (query is null)
+                return null;
+
+            var response = _mapper.Map<List<EducationResponse>>(query);
+            response.ForEach(ex => ex.UniversityLogoPath = !string.IsNullOrEmpty(ex.UniversityLogoPath) ? $"{_baseUrl}{ex.UniversityLogoPath}" : $"{_baseUrl}default.jpg");
+
+            return response;
         }
 
         public Task<DoctorEarningsResponse> GetEarningsReportAsync(int doctorId, DateTime startDate, DateTime endDate)
@@ -1445,7 +1450,7 @@
         }
 
         // 🔹 Private helper method to avoid duplication
-        private async Task<IEnumerable<AppointmentDto>> GetAppointmentsAsync(int doctorId, bool isUpcoming)
+        private async Task<List<AppointmentDto>> GetAppointmentsAsync(int doctorId, bool isUpcoming)
         {
             var now = DateTimeOffset.UtcNow;
 
@@ -1455,7 +1460,7 @@
             );
 
             // 🔹 Always return a non-null collection
-            return appointments?.Select(a => _mapper.Map<AppointmentDto>(a)) ?? Enumerable.Empty<AppointmentDto>();
+            return (List<AppointmentDto>)(appointments?.Select(a => _mapper.Map<AppointmentDto>(a)) ?? Enumerable.Empty<AppointmentDto>());
         }
 
         // 🔥 **Only removes cache; doesn't generate or set cache keys**
@@ -1495,7 +1500,7 @@
                 TotalYearsOfExperience = doctor.TotalYearsOfExperience,
                 Specializations = doctor.Specializations.Select(x => new SpecializationResponse
                 {
-                    Id = x.Id,
+                    Id = x.Id.ToString(),
                     Name = x.Name,
                     Category = x.Category,
                 }).ToList(),
@@ -1531,24 +1536,36 @@
                     VisitType = x.VisitType,
                 })
                 .ToList(),
+                Experiences = doctor.Experiences.Select(e=> new ExperienceResponse
+                {
+                    CurrentlyWorkingHere = e.CurrentlyWorkingHere,
+                    EmploymentType = e.EmploymentType,
+                    StartDate = e.StartDate,
+                    EndDate = e.EndDate,
+                    HospitalName = e.HospitalName,
+                    JobDescription = e.JobDescription,
+                    Title = e.Title,
+                    Location = e.Location,
+                    Id = e.Id.ToString(),
+                    HospitalLogo = $"{_baseUrl}{e.HospitalLogo}"
+                })
+                .ToList(),
                 Awards = doctor.Awards.Select(a => new AwardResponse
                 {
-                    Id = a.Id,
+                    Id = a.Id.ToString(),
                     DateReceived = a.DateReceived,
                     Description = a.Description,
-                    DoctorId = a.DoctorId,
                     Organization = a.Organization,
                     Title = a.Title,
                 })
                 .ToList(),
                 Educations = doctor.Educations.Select(e => new EducationResponse
                 {
-                    DoctorId = e.DoctorId,
                     AdditionalNotes = e.AdditionalNotes,
                     CurrentlyStudying = e.CurrentlyStudying,
                     Degree = e.Degree,
                     EndDate = e.EndDate,
-                    Id = e.Id,
+                    Id = e.Id.ToString(),
                     Location = e.Location,
                     Major = e.Major,
                     StartDate = e.StartDate,
@@ -1563,31 +1580,28 @@
                     Country = x.Country,
                     Street = x.Street,
                     ApartmentOrSuite = x.ApartmentOrSuite,
-                    ClinicImage = x.ClinicImage,
+                    ClinicImage = $"{_baseUrl}{x.ClinicImage}",
                     Landmark = x.Landmark,
-                    DoctorId = x.DoctorId,
-                    LogoPath = x.LogoPath,
+                    LogoPath = $"{_baseUrl}{x.LogoPath}",
                     Name = x.Name,
                     PhoneNumber = x.PhoneNumber,
                     WorkingTimes = x.WorkingTimes.Select(w => new WorkingTimeResponse
                     {
-                        ClinicId = w.Id,
+                        Id = w.Id.ToString(),
                         Day = w.Day,
-                        Id = w.Id,
                         IsAvailable = w.IsAvailable,
                         Periods = w.Periods.Select(p => new PeriodResponse
                         {
-                            Id = p.Id,
+                            Id = p.Id.ToString(),
                             IsAvailable = p.IsAvailable,
                             EndTime = p.EndTime,
                             StartTime = p.StartTime,
-                            WorkingTimeId = p.WorkingTimeId
                         }).ToList(),
                     }).ToList()
                 }).ToList(),
                 Specializations = doctor.Specializations.Select(x => new SpecializationResponse
                 {
-                    Id = x.Id,
+                    Id = x.Id.ToString(),
                     Name = x.Name,
                     Category = x.Category,
                 }).ToList(),
@@ -1612,6 +1626,8 @@
                 }).ToList(),
             };
         }
+
+       
     }
 
 }

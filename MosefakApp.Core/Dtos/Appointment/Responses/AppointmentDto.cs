@@ -2,14 +2,14 @@
 {
     public class AppointmentDto
     {
-        public int Id { get; set; }
+        public string Id { get; set; } = null!;
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
         public AppointmentStatus Status { get; set; }  // "Upcoming", "Completed", "Canceled"
         public string? ProblemDescription { get; set; }
 
         // 🔹 Patient Information
-        public int PatientId { get; set; }
+        public string PatientId { get; set; } = null!;
         public string PatientName { get; set; } = null!;
         public string PatientPhone { get; set; } = null!;
 

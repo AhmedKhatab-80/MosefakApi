@@ -1,4 +1,5 @@
 ﻿global using Microsoft.AspNetCore.Http;
+global using System.Collections.Concurrent;
 global using Microsoft.AspNetCore.Identity;
 global using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 global using Microsoft.EntityFrameworkCore;
@@ -29,5 +30,6 @@ global using MosefakApp.Infrastructure.Repositories.Generic;
 global using MosefakApp.Shared.Interfaces;
 global using System.Linq.Expressions;
 global using System.Security.Claims;
-
+global using Microsoft.Extensions.Logging;
+global using MosefakApp.Core.IServices.Logging;
 

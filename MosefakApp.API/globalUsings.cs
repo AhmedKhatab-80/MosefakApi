@@ -62,6 +62,15 @@ global using MosefakApp.Core.Dtos.Clinic.Responses;
 global using MosefakApp.Core.Dtos.Education.Requests;
 global using MosefakApp.Core.Dtos.Review.Responses;
 global using MosefakApp.Core.Dtos.Experience.Requests;
-
+global using MosefakApp.Core.IRepositories.Non_Generic;
+global using MosefakApp.Core.IServices.Logging;
+global using MosefakApp.Core.IUnit;
+global using MosefakApp.Infrastructure.Repositories.Non_Generic;
+global using MosefakApp.Infrastructure.Unit;
+global using MosefakApp.API.Helpers;
+global using MosefakApp.Core.Dtos.Award.Responses;
+global using MosefakApp.Core.Dtos.Education.Responses;
+global using MosefakApp.Core.Dtos.Experience.Responses;
+global using MosefakApp.Core.Dtos.Specialization.Responses;
 
 

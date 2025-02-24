@@ -1,4 +1,7 @@
-﻿namespace MosefakApp.Infrastructure.Data.context
+﻿
+using Microsoft.EntityFrameworkCore.Query;
+
+namespace MosefakApp.Infrastructure.Data.context
 {
     public class AppDbContext : DbContext
     {
@@ -28,7 +31,16 @@
 
             modelBuilder.Ignore<BaseEntity>();
 
-         //   modelBuilder.Entity<BaseEntity>().HasQueryFilter(x => !x.IsDeleted);
+
+            // Configure global query filter for soft delete
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                if (typeof(ISoftDeletable).IsAssignableFrom(entityType.ClrType))
+                {
+                    modelBuilder.Entity(entityType.ClrType)
+                        .HasQueryFilter(ConvertFilterExpression<ISoftDeletable>(e => !e.IsDeleted, entityType.ClrType));
+                }
+            }
 
             var cascadeFKs = modelBuilder.Model.GetEntityTypes()
                                                .SelectMany(t => t.GetForeignKeys())
@@ -40,6 +52,16 @@
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
 
+        private static LambdaExpression ConvertFilterExpression<TInterface>(
+            Expression<Func<TInterface, bool>> filterExpression, Type entityType)
+        {
+            var parameter = Expression.Parameter(entityType);
+            var body = ReplacingExpressionVisitor.Replace(
+                filterExpression.Parameters[0],
+                parameter,
+                filterExpression.Body);
+            return Expression.Lambda(body, parameter);
+        }
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var entries = ChangeTracker.Entries<BaseEntity>();

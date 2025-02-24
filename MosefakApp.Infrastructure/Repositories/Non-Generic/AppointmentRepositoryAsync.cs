@@ -31,7 +31,7 @@
                                                                     },
                                                                     DoctorSpecialization = x.Doctor.Specializations.Select(s => new SpecializationResponse
                                                                     {
-                                                                        Id = s.Id,
+                                                                        Id = s.Id.ToString(),
                                                                         Name = s.Name,
                                                                         Category = s.Category,
                                                                     })

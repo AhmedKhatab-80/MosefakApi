@@ -73,7 +73,7 @@
             }
 
             // 2️⃣ Retrieve the appointment including Payment navigation.
-            var appointment = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"])
                 .ConfigureAwait(false);
 
@@ -108,7 +108,7 @@
             }
 
             // 7️⃣ Update the appointment in the repository and commit changes.
-            await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .UpdateEntityAsync(appointment)
                 .ConfigureAwait(false);
 
@@ -186,7 +186,7 @@
         {
             using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
 
-            var appointmentRepo = _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>();
+            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
             // 🔍 Fetch appointment
             var appointment = await appointmentRepo.FirstOrDefaultASync(x => x.Id == appointmentId);
@@ -250,7 +250,7 @@
             try
             {
                 // 1️⃣ Retrieve the doctor with their appointment types.
-                var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>()
+                var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
                     .FirstOrDefaultASync(x => x.Id == request.DoctorId, new[] { "AppointmentTypes" })
                     .ConfigureAwait(false);
 
@@ -283,7 +283,7 @@
                     ProblemDescription = !string.IsNullOrEmpty(request.ProblemDescription)? request.ProblemDescription : null,
                 };
 
-                await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+                await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                     .AddEntityAsync(appointment)
                     .ConfigureAwait(false);
 
@@ -310,14 +310,14 @@
 
         private async Task<bool> IsTimeSlotAvailable(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
         {
-            var query = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>().IsTimeSlotAvailable(doctorId, startDate, endDate);
+            var query = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>().IsTimeSlotAvailable(doctorId, startDate, endDate);
 
             return query;
         }
 
         public async Task<bool> ApproveAppointmentByDoctor(int appointmentId)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>();
+            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
             var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
             if (appointment == null)
@@ -358,7 +358,7 @@
         }
         public async Task<bool> RejectAppointmentByDoctor(int appointmentId, string? rejectionReason)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>();
+            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
             var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
 
             if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.PendingApproval)
@@ -417,7 +417,7 @@
         }
         public async Task<bool> MarkAppointmentAsCompleted(int appointmentId)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>();
+            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
             var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
 
             if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.Confirmed)
@@ -455,7 +455,7 @@
         public async Task<bool> Pay(int appointmentId, CancellationToken cancellationToken = default)
         {
             // 1️⃣ Retrieve the appointment (including AppointmentType and Payment).
-            var appointment = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .FirstOrDefaultASync(
                     x => x.Id == appointmentId,
                     includes: ["AppointmentType", "Payment"])
@@ -529,7 +529,7 @@
         public async Task<bool> CancelAppointmentByDoctor(int appointmentId, string? cancellationReason, CancellationToken cancellationToken = default)
         {
             // 1️⃣ Retrieve the appointment including Payment details.
-            var appointment = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"])
                 .ConfigureAwait(false);
 
@@ -575,7 +575,7 @@
             }
 
             // 5️⃣ Update the appointment and commit changes.
-            await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .UpdateEntityAsync(appointment)
                 .ConfigureAwait(false);
 
@@ -602,7 +602,7 @@
             {
                 _loggerService.LogInfo("Started Auto Cancel Unpaid Appointments job.");
 
-                var appointmentRepo = _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>();
+                var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
                 // Define the criteria for unpaid and expired appointments
                 Expression<Func<Appointment, bool>> expression = x =>
