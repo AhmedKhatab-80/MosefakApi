@@ -4,10 +4,10 @@
     {
         public string Id { get; set; } = null!;
         public AppointmentStatus AppointmentStatus { get; set; }
-        public int DoctorId { get; set; }
+        public string DoctorId { get; set; } = null!;
         public string DoctorFullName { get; set; } = null!;
         public string? DoctorImage { get; set; }
-        public IList<SpecializationResponse> DoctorSpecialization { get; set; } = null!;
+        public List<SpecializationResponse> DoctorSpecialization { get; set; } = null!;
         public DateTimeOffset StartDate { get; set; }
         public DateTimeOffset EndDate { get; set; }
         public AppointmentTypeResponse AppointmentType { get; set; } = null!;

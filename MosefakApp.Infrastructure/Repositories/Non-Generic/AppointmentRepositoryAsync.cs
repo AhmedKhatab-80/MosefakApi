@@ -19,7 +19,7 @@
                                                                 new AppointmentResponse
                                                                 {
                                                                     Id = x.Id.ToString(),
-                                                                    DoctorId = x.Doctor.AppUserId,
+                                                                    DoctorId = x.Doctor.AppUserId.ToString(),
                                                                     StartDate = x.StartDate,
                                                                     EndDate = x.EndDate,
                                                                     AppointmentType = new AppointmentTypeResponse

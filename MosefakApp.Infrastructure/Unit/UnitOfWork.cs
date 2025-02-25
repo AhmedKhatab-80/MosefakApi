@@ -36,6 +36,11 @@
                             _customRepositories.TryAdd(interfaceType, repo);
                             _logger.LogInfo("Registered repository under interface: {InterfaceType}", interfaceType.Name);
                         }
+                        if (interfaceType == typeof(IAppointmentRepositoryAsync)) // Explicitly check for this type
+                        {
+                            _customRepositories.TryAdd(interfaceType, repo);
+                            _logger.LogInfo("Registered repository under interface: {InterfaceType}", interfaceType.Name);
+                        }
                     }
 
                     _customRepositories.TryAdd(repo.GetType(), repo);

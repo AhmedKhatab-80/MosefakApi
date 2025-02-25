@@ -9,7 +9,7 @@
 
 
             RuleFor(x => x.DoctorId)
-                .GreaterThan(0).WithMessage("Doctor ID must be valid.");
+                .NotEmpty().WithMessage("Doctor ID is required");
 
             RuleFor(x => x.StartDate).GreaterThan(DateTime.UtcNow).WithMessage("Start date must be in the future.");
             

@@ -8,7 +8,7 @@
             Include(new RequiredStringValidator<RescheduleAppointmentRequest>(x => x.AppointmentId, "AppointmentId"));
 
 
-            RuleFor(x => x.selectedDate).GreaterThan(DateTime.UtcNow).WithMessage("Selected Date must be in the future.");
+            RuleFor(x => x.selectedDate).GreaterThanOrEqualTo(DateTime.UtcNow.Date).WithMessage("Selected Date must be Greater Than Or Equal To Day.");
         }
     }
 }

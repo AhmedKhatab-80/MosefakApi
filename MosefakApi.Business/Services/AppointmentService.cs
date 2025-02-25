@@ -38,7 +38,7 @@
 
         public async Task<List<AppointmentResponse>> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null, CancellationToken cancellationToken = default)
         {
-            var appointments = await FetchPatientAppointments(doctorId, status);
+            var appointments = await FetchDoctorAppointments(doctorId, status);
             if (!appointments.Any()) return new List<AppointmentResponse>();
 
             var doctorAppUserIds = appointments.Select(a => a.Doctor.AppUserId).Distinct().ToList();
@@ -133,10 +133,14 @@
         public async Task<List<AppointmentResponse>> GetAppointmentsByDateRange(
             int patientId, DateTimeOffset startDate, DateTimeOffset endDate,CancellationToken cancellationToken = default)
         {
-            // Retrieve appointments with necessary navigations: AppointmentType, Doctor, and Doctor.Specializations.
+            // Ensure the time part is considered to avoid extra records.
+            var startOfDay = startDate.Date; // Start at 00:00 of the given date
+            var endOfDay = endDate.Date.AddDays(1).AddTicks(-1); // End at 23:59:59.999 of the given date
+
             var appointments = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
-                    x => x.PatientId == patientId && x.CreatedAt >= startDate && x.CreatedAt <= endDate,
+                   x => x.PatientId == patientId &&
+                         x.CreatedAt >= startOfDay && x.CreatedAt <= endOfDay, // ✅ Fixed filtering
                     includes: ["AppointmentType", "Doctor", "Doctor.Specializations"]);
 
             if (!appointments.Any())
@@ -156,12 +160,16 @@
         }
 
         public async Task<List<AppointmentResponse>> GetAppointmentsByDateRangeForDoctor(
-            int doctorId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
+          int doctorId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
         {
-            // Retrieve appointments with necessary navigations: AppointmentType, Doctor, and Doctor.Specializations.
+            // Convert startDate and endDate to cover the full day
+            var startOfDay = startDate.Date; // Converts to `2025-02-25T00:00:00`
+            var endOfDay = startDate.Date.AddDays(1).AddTicks(-1); // Converts to `2025-02-25T23:59:59.999`
+
             var appointments = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
-                    x => x.Doctor.AppUserId == doctorId && x.CreatedAt >= startDate && x.CreatedAt <= endDate,
+                    x => x.Doctor.AppUserId == doctorId &&
+                         x.StartDate >= startOfDay && x.StartDate <= endOfDay, // ✅ Fixed filtering
                     includes: ["AppointmentType", "Doctor", "Doctor.Specializations"]);
 
             if (!appointments.Any())
@@ -181,131 +189,146 @@
         }
 
 
-        // StartDate must be before EndDate in reschudle.
+
         public async Task<bool> RescheduleAppointmentAsync(int appointmentId, DateTime selectedDate, TimeSlot newTimeSlot)
         {
-            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            // 🔍 Fetch appointment
-            var appointment = await appointmentRepo.FirstOrDefaultASync(x => x.Id == appointmentId);
+                try
+                {
+                    var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
-            if (appointment is null)
-                throw new ItemNotFound("Appointment does not exist.");
+                    // 🔍 Fetch appointment
+                    var appointment = await appointmentRepo.FirstOrDefaultASync(x => x.Id == appointmentId);
 
-            if (appointment.AppointmentStatus == AppointmentStatus.Completed ||
-                appointment.AppointmentStatus == AppointmentStatus.CanceledByPatient)
-                throw new BadRequest("Cannot reschedule a canceled or completed appointment.");
+                    if (appointment is null)
+                        throw new ItemNotFound("Appointment does not exist.");
 
-            if (newTimeSlot.EndTime < newTimeSlot.StartTime)
-                throw new BadRequest("Invalid time slot. End time must be after start time.");
+                    if (appointment.AppointmentStatus == AppointmentStatus.Completed ||
+                        appointment.AppointmentStatus == AppointmentStatus.CanceledByPatient)
+                        throw new BadRequest("Cannot reschedule a canceled or completed appointment.");
 
-            // 📅 Convert TimeSlot into UTC-based DateTimeOffsets
-            var startTimeOffset = new DateTimeOffset(
-                selectedDate.Year, selectedDate.Month, selectedDate.Day,
-                newTimeSlot.StartTime.Hour, newTimeSlot.StartTime.Minute, 0,
-                TimeZoneInfo.Local.GetUtcOffset(DateTime.Now));
+                    if (newTimeSlot.EndTime < newTimeSlot.StartTime)
+                        throw new BadRequest("Invalid time slot. End time must be after start time.");
 
-            var endTimeOffset = startTimeOffset.Add(newTimeSlot.EndTime - newTimeSlot.StartTime);
+                    // 📅 Convert TimeSlot into UTC-based DateTimeOffsets
+                    var startTimeOffset = new DateTimeOffset(
+                        selectedDate.Year, selectedDate.Month, selectedDate.Day,
+                        newTimeSlot.StartTime.Hour, newTimeSlot.StartTime.Minute, 0,
+                        TimeZoneInfo.Local.GetUtcOffset(DateTime.Now));
 
-            // ✅ **Check for availability**
-            if (!await appointmentRepo.IsTimeSlotAvailable(appointment.DoctorId, startTimeOffset, endTimeOffset))
-                throw new InvalidOperationException("The selected time slot is already booked.");
+                    var endTimeOffset = startTimeOffset.Add(newTimeSlot.EndTime - newTimeSlot.StartTime);
 
-            // ✅ **Update appointment**
-            appointment.StartDate = startTimeOffset;
-            appointment.EndDate = endTimeOffset;
-            appointment.AppointmentStatus = AppointmentStatus.PendingApproval;
+                    // ✅ **Check for availability**
+                    if (!await appointmentRepo.IsTimeSlotAvailable(appointment.DoctorId, startTimeOffset, endTimeOffset))
+                        throw new InvalidOperationException("The selected time slot is already booked.");
 
-            await appointmentRepo.UpdateEntityAsync(appointment);
-            var rowsAffected = await _unitOfWork.CommitAsync();
+                    // ✅ **Update appointment**
+                    appointment.StartDate = startTimeOffset;
+                    appointment.EndDate = endTimeOffset;
+                    appointment.AppointmentStatus = AppointmentStatus.PendingApproval;
 
-            if (rowsAffected == 0)
-                return false;
+                    await appointmentRepo.UpdateEntityAsync(appointment);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new Exception("Failed to reschedule appointment.");
 
-            // ✅ **Send notification to the doctor**
-            //var doctorDeviceToken = await _unitOfWork.UserRepository.GetUserDeviceToken(appointment.DoctorId);
-            //if (!string.IsNullOrEmpty(doctorDeviceToken))
-            //{
-            //    await _firebaseNotificationService.SendPushNotification(
-            //        doctorDeviceToken,
-            //        "Appointment Rescheduled",
-            //        $"A patient has rescheduled an appointment to {startTimeOffset:dd/MM/yyyy HH:mm}.");
-            //}
+                    // ✅ **Send notification to the doctor**
+                    //var doctorDeviceToken = await _unitOfWork.UserRepository.GetUserDeviceToken(appointment.DoctorId);
+                    //if (!string.IsNullOrEmpty(doctorDeviceToken))
+                    //{
+                    //    await _firebaseNotificationService.SendPushNotification(
+                    //        doctorDeviceToken,
+                    //        "Appointment Rescheduled",
+                    //        $"A patient has rescheduled an appointment to {startTimeOffset:dd/MM/yyyy HH:mm}.");
+                    //}
 
-            // ✅ **Clear Cache**
-            await _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming");
+                    // ✅ **Clear Cache**
+                    await _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming");
 
-            transactionScope.Complete();
-            return true;
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw new Exception($"Failed to reschedule appointment {appointmentId}: {ex.Message}", ex);
+                }
+            });
         }
+
 
 
         public async Task<bool> BookAppointment(BookAppointmentRequest request, int appUserIdFromClaims, CancellationToken cancellationToken = default)
         {
-            // Start a transaction.
-            using var transaction = await _unitOfWork.BeginTransactionAsync().ConfigureAwait(false);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                // 1️⃣ Retrieve the doctor with their appointment types.
-                var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
-                    .FirstOrDefaultASync(x => x.Id == request.DoctorId, new[] { "AppointmentTypes" })
-                    .ConfigureAwait(false);
+                await using var transaction = await _unitOfWork.BeginTransactionAsync().ConfigureAwait(false);
 
-                if (doctor == null)
-                    throw new ItemNotFound("Doctor does not exist.");
-
-                // 2️⃣ Retrieve the specified appointment type.
-                var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id.ToString() == request.AppointmentTypeId);
-                if (appointmentType == null)
-                    throw new ItemNotFound("This appointment type does not exist for this doctor.");
-
-                // 3️⃣ Calculate the appointment's end time by adding the duration to the start date.
-                // This handles all cases (hours, minutes, etc.) in one call.
-                var endTime = request.StartDate.Add(appointmentType.Duration);
-
-                // 4️⃣ Check if the new time slot is available.
-                if (!await IsTimeSlotAvailable(doctor.Id, request.StartDate, endTime).ConfigureAwait(false))
-                    throw new BadRequest("Cannot book appointment; the selected time slot is already booked. Please try another time.");
-
-                // 5️⃣ Create the appointment.
-                var appointment = new Appointment
+                try
                 {
-                    PatientId = appUserIdFromClaims,
-                    DoctorId = request.DoctorId,
-                    AppointmentStatus = AppointmentStatus.PendingApproval,
-                    AppointmentTypeId = int.Parse(request.AppointmentTypeId),
-                    PaymentStatus = PaymentStatus.Pending,
-                    StartDate = request.StartDate,
-                    EndDate = endTime,
-                    ProblemDescription = !string.IsNullOrEmpty(request.ProblemDescription)? request.ProblemDescription : null,
-                };
+                    // 1️⃣ Retrieve the doctor with their appointment types.
+                    var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
+                        .FirstOrDefaultASync(x => x.Id == int.Parse(request.DoctorId), ["AppointmentTypes"])
+                        .ConfigureAwait(false);
 
-                await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                    .AddEntityAsync(appointment)
-                    .ConfigureAwait(false);
+                    if (doctor == null)
+                        throw new ItemNotFound("Doctor does not exist.");
 
-                var rowsAffected = await _unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-                if (rowsAffected <= 0)
-                    throw new Exception("Failed to book appointment.");
+                    // 2️⃣ Retrieve the specified appointment type.
+                    var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id.ToString() == request.AppointmentTypeId);
+                    if (appointmentType == null)
+                        throw new ItemNotFound("This appointment type does not exist for this doctor.");
 
-                // 6️⃣ Commit the transaction.
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    // 3️⃣ Calculate the appointment's end time by adding the duration to the start date.
+                    var endTime = request.StartDate.Add(appointmentType.Duration);
 
-                // TODO: Send Notofication to doctor tell him to approve
+                    // 4️⃣ Check if the new time slot is available.
+                    if (!await IsTimeSlotAvailable(doctor.Id, request.StartDate, endTime).ConfigureAwait(false))
+                        throw new BadRequest("Cannot book appointment; the selected time slot is already booked. Please try another time.");
 
-                // TODO: remove appointments cache.
+                    // 5️⃣ Create the appointment.
+                    var appointment = new Appointment
+                    {
+                        PatientId = appUserIdFromClaims,
+                        DoctorId = int.Parse(request.DoctorId),
+                        AppointmentStatus = AppointmentStatus.PendingApproval,
+                        AppointmentTypeId = int.Parse(request.AppointmentTypeId),
+                        PaymentStatus = PaymentStatus.Pending,
+                        StartDate = request.StartDate,
+                        EndDate = endTime,
+                        ProblemDescription = !string.IsNullOrEmpty(request.ProblemDescription) ? request.ProblemDescription : null,
+                    };
 
-                return true;
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                throw;
-            }
+                    await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
+                        .AddEntityAsync(appointment)
+                        .ConfigureAwait(false);
+
+                    if (await _unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false) <= 0)
+                        throw new Exception("Failed to book appointment.");
+
+                    // 6️⃣ Commit the transaction.
+                    await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+                    // TODO: Send Notification to doctor to approve
+
+                    // TODO: Remove appointments cache
+
+                    return true;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+            });
         }
+
 
 
         private async Task<bool> IsTimeSlotAvailable(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
@@ -317,80 +340,100 @@
 
         public async Task<bool> ApproveAppointmentByDoctor(int appointmentId)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
-            if (appointment == null)
+            return await strategy.ExecuteAsync(async () =>
             {
-                _loggerService.LogWarning($"Approval failed: Appointment {appointmentId} not found.");
-                throw new ItemNotFound("Appointment does not exist.");
-            }
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            if (appointment.AppointmentStatus != AppointmentStatus.PendingApproval)
-            {
-                _loggerService.LogWarning($"Invalid status: Appointment {appointmentId} cannot be approved.");
-                throw new BadRequest("Appointment is not in a pending approval state.");
-            }
+                try
+                {
+                    var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
+                    var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-            try
-            {
-                appointment.AppointmentStatus = AppointmentStatus.PendingPayment;
-                appointment.ApprovedByDoctor = true;
-                appointment.PaymentDueTime = DateTime.UtcNow.AddHours(24);
+                    if (appointment == null)
+                    {
+                        _loggerService.LogWarning($"Approval failed: Appointment {appointmentId} not found.");
+                        throw new ItemNotFound("Appointment does not exist.");
+                    }
 
-                await appointmentRepo.UpdateEntityAsync(appointment);
-                await _unitOfWork.CommitAsync();
+                    if (appointment.AppointmentStatus != AppointmentStatus.PendingApproval)
+                    {
+                        _loggerService.LogWarning($"Invalid status: Appointment {appointmentId} cannot be approved.");
+                        throw new BadRequest("Appointment is not in a pending approval state.");
+                    }
 
-                //await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Approved",
-                //    "Your appointment has been approved. Please complete payment within 24 hours.");
+                    appointment.AppointmentStatus = AppointmentStatus.PendingPayment;
+                    appointment.ApprovedByDoctor = true;
+                    appointment.PaymentDueTime = DateTime.UtcNow.AddHours(24);
 
-                await _unitOfWork.CommitTransactionAsync();
-                _loggerService.LogInfo($"Appointment {appointmentId} approved successfully.");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                _loggerService.LogError($"Failed to approve appointment {appointmentId}: {ex.Message}");
-                throw;
-            }
+                    await appointmentRepo.UpdateEntityAsync(appointment);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new Exception("Failed to approve appointment.");
+
+                    await transaction.CommitAsync();
+                    _loggerService.LogInfo($"Appointment {appointmentId} approved successfully.");
+
+                    // TODO: Send Notification
+                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Approved",
+                    //     "Your appointment has been approved. Please complete payment within 24 hours.");
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _loggerService.LogError($"Failed to approve appointment {appointmentId}: {ex.Message}");
+                    throw;
+                }
+            });
         }
+
         public async Task<bool> RejectAppointmentByDoctor(int appointmentId, string? rejectionReason)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
-            var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.PendingApproval)
+            return await strategy.ExecuteAsync(async () =>
             {
-                _loggerService.LogWarning($"Invalid rejection: Appointment {appointmentId} not found or already processed.");
-                throw new BadRequest("Invalid appointment or already processed.");
-            }
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-            try
-            {
-                appointment.AppointmentStatus = AppointmentStatus.CanceledByDoctor;
-                appointment.CancelledAt = DateTime.UtcNow;
-                appointment.CancellationReason = rejectionReason;
+                try
+                {
+                    var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
+                    var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
 
-                await appointmentRepo.UpdateEntityAsync(appointment);
-                await _unitOfWork.CommitAsync();
+                    if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.PendingApproval)
+                    {
+                        _loggerService.LogWarning($"Invalid rejection: Appointment {appointmentId} not found or already processed.");
+                        throw new BadRequest("Invalid appointment or already processed.");
+                    }
 
-                //await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Rejected",
-                //    "Your appointment request was rejected. Reason: " + (rejectionReason ?? "Not specified."));
+                    appointment.AppointmentStatus = AppointmentStatus.CanceledByDoctor;
+                    appointment.CancelledAt = DateTime.UtcNow;
+                    appointment.CancellationReason = rejectionReason;
 
-                await _unitOfWork.CommitTransactionAsync();
-                _loggerService.LogInfo($"Appointment {appointmentId} rejected successfully.");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                _loggerService.LogError($"Failed to reject appointment {appointmentId}: {ex.Message}");
-                throw;
-            }
+                    await appointmentRepo.UpdateEntityAsync(appointment);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new Exception("Failed to reject appointment.");
+
+                    await transaction.CommitAsync();
+                    _loggerService.LogInfo($"Appointment {appointmentId} rejected successfully.");
+
+                    // TODO: Send Notification
+                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Rejected",
+                    //     "Your appointment request was rejected. Reason: " + (rejectionReason ?? "Not specified."));
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _loggerService.LogError($"Failed to reject appointment {appointmentId}: {ex.Message}");
+                    throw;
+                }
+            });
         }
+
 
         public async Task<List<AppointmentResponse>> GetPendingAppointmentsForDoctor(int doctorId, CancellationToken cancellationToken = default)
         {
@@ -417,39 +460,49 @@
         }
         public async Task<bool> MarkAppointmentAsCompleted(int appointmentId)
         {
-            var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
-            var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
-            if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.Confirmed)
+            return await strategy.ExecuteAsync(async () =>
             {
-                _loggerService.LogWarning($"Completion failed: Appointment {appointmentId} not found or not confirmed.");
-                throw new BadRequest("Invalid appointment status.");
-            }
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-            try
-            {
-                appointment.AppointmentStatus = AppointmentStatus.Completed;
-                appointment.CompletedAt = DateTime.UtcNow;
-                appointment.ServiceProvided = true;
+                try
+                {
+                    var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
+                    var appointment = await appointmentRepo.GetByIdAsync(appointmentId);
 
-                await appointmentRepo.UpdateEntityAsync(appointment);
-                await _unitOfWork.CommitAsync();
+                    if (appointment == null || appointment.AppointmentStatus != AppointmentStatus.Confirmed)
+                    {
+                        _loggerService.LogWarning($"Completion failed: Appointment {appointmentId} not found or not confirmed.");
+                        throw new BadRequest("Invalid appointment status.");
+                    }
 
-                //await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Completed",
-                //    "Your appointment has been successfully completed.");
+                    appointment.AppointmentStatus = AppointmentStatus.Completed;
+                    appointment.CompletedAt = DateTime.UtcNow;
+                    appointment.ServiceProvided = true;
 
-                await _unitOfWork.CommitTransactionAsync();
-                _loggerService.LogInfo($"Appointment {appointmentId} marked as completed.");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                _loggerService.LogError($"Failed to complete appointment {appointmentId}: {ex.Message}");
-                throw;
-            }
+                    await appointmentRepo.UpdateEntityAsync(appointment);
+                    if (await _unitOfWork.CommitAsync() <= 0)
+                        throw new Exception("Failed to mark appointment as completed.");
+
+                    await transaction.CommitAsync();
+                    _loggerService.LogInfo($"Appointment {appointmentId} marked as completed.");
+
+                    // TODO: Send Notification
+                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Completed",
+                    //     "Your appointment has been successfully completed.");
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _loggerService.LogError($"Failed to complete appointment {appointmentId}: {ex.Message}");
+                    throw;
+                }
+            });
         }
+
 
 
         public async Task<bool> Pay(int appointmentId, CancellationToken cancellationToken = default)
@@ -708,7 +761,7 @@
                 EndDate = appointment.EndDate,
                 AppointmentStatus = appointment.AppointmentStatus,
                 AppointmentType = _mapper.Map<AppointmentTypeResponse>(appointment.AppointmentType),
-                DoctorId = appointment.Doctor.Id,
+                DoctorId = appointment.Doctor.Id.ToString(),
                 DoctorFullName = $"{doctor.FirstName} {doctor.LastName}",
                 DoctorImage = !string.IsNullOrEmpty(doctor.ImagePath)
                                 ? $"{_baseUrl}{doctor.ImagePath}"

@@ -10,9 +10,10 @@
         private readonly IConfiguration _configuration;
         private readonly UserManager<AppUser> _userManager;
         private readonly IMapper _mapper;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly string _baseUrl;
 
-        public DoctorService(IUnitOfWork unitOfWork, IUserRepository userRepository, ICacheService cacheService, IImageService imageService, IConfiguration configuration, UserManager<AppUser> userManager, IMapper mapper)
+        public DoctorService(IUnitOfWork unitOfWork, IUserRepository userRepository, ICacheService cacheService, IImageService imageService, IConfiguration configuration, UserManager<AppUser> userManager, IMapper mapper, IHttpContextAccessor httpContextAccessor)
         {
             _unitOfWork = unitOfWork;
             _userRepository = userRepository;
@@ -21,6 +22,7 @@
             _configuration = configuration;
             _userManager = userManager;
             _mapper = mapper;
+            _httpContextAccessor = httpContextAccessor;
             _baseUrl = _configuration["BaseUrl"] ?? "https://default-url.com/";
         }
 
@@ -1178,21 +1180,19 @@
             });
         }
 
-
-
         public async Task<bool> EditClinicAsync(int doctorId, int clinicId, ClinicRequest request, CancellationToken cancellationToken = default)
         {
             var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
 
             return await strategy.ExecuteAsync(async () =>
             {
-                // 🔹 Step 1: Retrieve Clinic with Related Entities
-                var clinic = await _unitOfWork.Repository<Clinic>().FirstOrDefaultASync(
+                // 🔹 Step 1: Retrieve Clinic with Related Entities using UnitOfWork
+                var clinicRepo = _unitOfWork.Repository<Clinic>();
+                var clinic = await clinicRepo.FirstOrDefaultASync(
                     x => x.Id == clinicId && x.Doctor.AppUserId == doctorId,
-                    includes: ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]
-                );
+                    ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
 
-                if (clinic is null)
+                if (clinic == null)
                     throw new ItemNotFound("Clinic does not exist or you have no permission.");
 
                 // 🔹 Step 2: Normalize Input & Check for Duplicates
@@ -1202,15 +1202,14 @@
                 var normalizedName = request.Name.Trim().ToLower();
                 var normalizedPhone = request.PhoneNumber.Trim();
 
-                var isDuplicated = await _unitOfWork.Repository<Clinic>().AnyAsync(
+                var isDuplicated = await clinicRepo.AnyAsync(
                     x => x.Id != clinicId && // Exclude the current clinic
                          x.Street.Trim().ToLower() == normalizedStreet &&
                          x.City.Trim().ToLower() == normalizedCity &&
                          x.Country.Trim().ToLower() == normalizedCountry &&
                          x.DoctorId == clinic.DoctorId &&
                          x.Name.Trim().ToLower() == normalizedName &&
-                         x.PhoneNumber.Trim() == normalizedPhone
-                );
+                         x.PhoneNumber.Trim() == normalizedPhone);
 
                 if (isDuplicated)
                     throw new ItemAlreadyExist("Clinic already exists.");
@@ -1222,12 +1221,21 @@
 
                 try
                 {
-                    // 🔹 Step 3: Upload Images (Only if a New Image is Provided)
+                    // 🔹 Step 3: Upload New Images (Only if Provided) and Track Old Paths for Deletion
+                    string? oldLogoPath = clinic.LogoPath;
+                    string? oldClinicImagePath = clinic.ClinicImage;
+
                     if (request.ClinicImage != null)
-                        clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, clinic.ClinicImage!, cancellationToken);
+                    {
+                        clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, oldClinicImagePath, cancellationToken);
+                        clinic.ClinicImage = clinicNewPath;
+                    }
 
                     if (request.LogoPath != null)
-                        clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, clinic.LogoPath!, cancellationToken);
+                    {
+                        clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, oldLogoPath, cancellationToken);
+                        clinic.LogoPath = clinicNewLogoPath;
+                    }
 
                     // 🔹 Step 4: Update Clinic Fields
                     clinic.Name = request.Name.Trim();
@@ -1237,61 +1245,105 @@
                     clinic.Landmark = request.Landmark?.Trim();
                     clinic.PhoneNumber = request.PhoneNumber.Trim();
                     clinic.ApartmentOrSuite = request.ApartmentOrSuite?.Trim();
-                    clinic.ClinicImage = clinicNewPath ?? clinic.ClinicImage;
-                    clinic.LogoPath = clinicNewLogoPath ?? clinic.LogoPath;
 
-                    // 🔹 Step 5: Update Working Times (If Provided)
+                    // 🔹 Step 5: Soft Delete Existing WorkingTimes and Add New Ones
                     if (request.WorkingTimes.Any())
                     {
-                        clinic.WorkingTimes.Clear();
-                        
+                        var workingTimeRepo = _unitOfWork.Repository<WorkingTime>();
+                        var periodRepo = _unitOfWork.Repository<Period>();
+
+                        // Soft delete existing WorkingTimes and their Periods
+                        foreach (var existingWorkingTime in clinic.WorkingTimes.ToList())
+                        {
+                            existingWorkingTime.MarkAsDeleted(int.Parse(GetCurrentUserId()));
+                            await workingTimeRepo.UpdateEntityAsync(existingWorkingTime);
+
+                            foreach (var period in existingWorkingTime.Periods.ToList())
+                            {
+                                period.MarkAsDeleted(int.Parse(GetCurrentUserId()));
+                                await periodRepo.UpdateEntityAsync(period);
+                            }
+                        }
+
+                        // Add new WorkingTimes
                         foreach (var w in request.WorkingTimes)
                         {
-                            clinic.WorkingTimes.Add(new WorkingTime()
+                            var workingTime = new WorkingTime
                             {
                                 Day = w.Day,
-                                Periods = w.Periods.Select(p => new Period
+                                ClinicId = clinic.Id,
+                                Clinic = clinic
+                            };
+
+                            foreach (var p in w.Periods)
+                            {
+                                workingTime.Periods.Add(new Period
                                 {
                                     StartTime = p.StartTime,
                                     EndTime = p.EndTime,
-                                }).ToList()
-                            });
+                                    WorkingTimeId = workingTime.Id,
+                                    WorkingTime = workingTime
+                                });
+                            }
+
+                            await workingTimeRepo.AddEntityAsync(workingTime);
+                            clinic.WorkingTimes.Add(workingTime);
                         }
                     }
 
-                    await _unitOfWork.Repository<Clinic>().UpdateEntityAsync(clinic);
+                    await clinicRepo.UpdateEntityAsync(clinic);
 
-                    if (await _unitOfWork.CommitAsync() <= 0)
+                    if (await _unitOfWork.CommitAsync(cancellationToken) <= 0)
                         throw new BadRequest("Failed to edit clinic.");
 
-                    await transaction.CommitAsync(cancellationToken);
+                    await _unitOfWork.CommitTransactionAsync();
 
-                    // 🔹 Step 6: Remove Old Images Only After Successful Update
-                    if (!string.IsNullOrEmpty(clinicNewLogoPath) && clinicNewLogoPath != clinic.LogoPath)
-                        _ = _imageService.RemoveImage(clinic.LogoPath); // Fire & Forget
+                    // 🔹 Step 6: Remove Old Images Only After Successful Update and Commit
+                    var deletionTasks = new List<Task>();
+                    if (!string.IsNullOrEmpty(oldLogoPath) && clinicNewLogoPath != oldLogoPath)
+                    {
+                        deletionTasks.Add(_imageService.RemoveImage(oldLogoPath));
+                    }
 
-                    if (!string.IsNullOrEmpty(clinicNewPath) && clinicNewPath != clinic.ClinicImage)
-                        _ = _imageService.RemoveImage(clinic.ClinicImage); // Fire & Forget
+                    if (!string.IsNullOrEmpty(oldClinicImagePath) && clinicNewPath != oldClinicImagePath)
+                    {
+                        deletionTasks.Add(_imageService.RemoveImage(oldClinicImagePath));
+                    }
+
+                    // Wait for all image deletions to complete, but don't block the main response
+                    if (deletionTasks.Any())
+                    {
+                        await Task.WhenAll(deletionTasks);
+                    }
 
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
+                    await _unitOfWork.RollbackTransactionAsync();
 
                     // 🔥 Remove newly uploaded images if the transaction fails
                     if (!string.IsNullOrEmpty(clinicNewLogoPath))
-                        _ = _imageService.RemoveImage(clinicNewLogoPath); // Fire & Forget
+                    {
+                        await _imageService.RemoveImage(clinicNewLogoPath);
+                    }
 
                     if (!string.IsNullOrEmpty(clinicNewPath))
-                        _ = _imageService.RemoveImage(clinicNewPath); // Fire & Forget
+                    {
+                        await _imageService.RemoveImage(clinicNewPath);
+                    }
 
                     throw new Exception("Failed to edit clinic.", ex);
                 }
             });
         }
 
-
+        // Helper method to get the current user ID
+        private string GetCurrentUserId()
+        {
+            var currentUserIdClaim = _httpContextAccessor?.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier);
+            return currentUserIdClaim?.Value ?? throw new UnauthorizedAccessException("Current user ID not found.");
+        }
 
         public async Task<bool> RemoveClinicAsync(int doctorId, int clinicId)
         {
@@ -1301,7 +1353,7 @@
             {
                 // 🔹 Step 1: Retrieve the Clinic
                 var clinic = await _unitOfWork.Repository<Clinic>()
-                    .FirstOrDefaultASync(x => x.Id == clinicId && x.Doctor.Id == doctorId, ["Doctor"]);
+                    .FirstOrDefaultASync(x => x.Id == clinicId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
                 if (clinic is null)
                     throw new ItemNotFound("Clinic does not exist or you have no permission.");
@@ -1344,9 +1396,36 @@
             var clinics = await _unitOfWork.Repository<Clinic>()
                 .GetAllAsync(c => c.DoctorId == doctorId, ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
 
-            return clinics?.Count > 0 ? _mapper.Map<List<ClinicResponse>>(clinics.ToList()) : new List<ClinicResponse>();
+            if(clinics?.Count > 0)
+            {
+                var map = _mapper.Map<List<ClinicResponse>>(clinics.ToList());
+
+                map.ForEach(x => x.ClinicImage = !string.IsNullOrEmpty(x.ClinicImage) ? $"{_baseUrl}{x.ClinicImage}" : $"{_baseUrl}default.jpg");
+                map.ForEach(x => x.LogoPath = !string.IsNullOrEmpty(x.LogoPath) ? $"{_baseUrl}{x.LogoPath}" : $"{_baseUrl}default.jpg");
+
+                return map;
+            }
+
+            return new List<ClinicResponse>();
         }
 
+        public async Task<List<ClinicResponse>> GetDoctorClinicsForDoctorAsync(int doctorId)
+        {
+            var clinics = await _unitOfWork.Repository<Clinic>()
+                .GetAllAsync(c => c.Doctor.AppUserId == doctorId, ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
+
+            if (clinics?.Count > 0)
+            {
+                var map = _mapper.Map<List<ClinicResponse>>(clinics.ToList());
+
+                map.ForEach(x => x.ClinicImage = !string.IsNullOrEmpty(x.ClinicImage) ? $"{_baseUrl}{x.ClinicImage}" : $"{_baseUrl}default.jpg");
+                map.ForEach(x => x.LogoPath = !string.IsNullOrEmpty(x.LogoPath) ? $"{_baseUrl}{x.LogoPath}" : $"{_baseUrl}default.jpg");
+
+                return map;
+            }
+
+            return new List<ClinicResponse>();
+        }
 
         public async Task<List<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId)
         {

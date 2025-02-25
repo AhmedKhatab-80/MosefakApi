@@ -18,6 +18,6 @@
 
         // Contact Field
         public string PhoneNumber { get; set; } = null!;
-        public ICollection<WorkingTimeRequest> WorkingTimes { get; set; } = new HashSet<WorkingTimeRequest>();
+        public List<WorkingTimeRequest> WorkingTimes { get; set; } = new List<WorkingTimeRequest>();
     }
 }

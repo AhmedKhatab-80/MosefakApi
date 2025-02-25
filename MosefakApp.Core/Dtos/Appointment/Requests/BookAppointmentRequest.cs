@@ -2,7 +2,7 @@
 {
     public class BookAppointmentRequest
     {
-        public int DoctorId { get; set; }
+        public string DoctorId { get; set; } = null!;
         public DateTimeOffset StartDate { get; set; } 
         public string? ProblemDescription { get; set; }
         public string AppointmentTypeId { get; set; } = null!;

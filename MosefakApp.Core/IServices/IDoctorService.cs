@@ -49,7 +49,8 @@
 
 
         // 🔹 Clinic Management
-        Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); // FromUserClaims
+        Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId); 
+        Task<List<ClinicResponse>> GetDoctorClinicsForDoctorAsync(int doctorId); // FromUserClaims
         Task<bool> AddClinicAsync(int doctorId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> EditClinicAsync(int doctorId, int clinicId, ClinicRequest request, CancellationToken cancellationToken = default); // FromUserClaims
         Task<bool> RemoveClinicAsync(int doctorId, int clinicId); // FromUserClaims

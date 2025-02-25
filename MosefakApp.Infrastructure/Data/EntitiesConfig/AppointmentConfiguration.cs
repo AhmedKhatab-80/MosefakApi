@@ -4,7 +4,7 @@
     {
         public void Configure(EntityTypeBuilder<Appointment> builder)
         {
-            builder.ToTable("Appointments").HasKey(x => new { x.Id, x.PatientId, x.DoctorId });
+            builder.ToTable("Appointments").HasKey(x => x.Id);
 
             builder.Property(x => x.AppointmentStatus)
                 .HasConversion(new EnumToStringConverter<AppointmentStatus>());

@@ -431,7 +431,7 @@
             return Ok(query);
         }
 
-        // ✅ Get all clinics of a doctor
+        // ✅ Get all clinics of a doctor for patient
         [HttpGet("{doctorId}/clinics")]
         [HasPermission(Permissions.ViewClinics)]
         public async Task<ActionResult<IEnumerable<ClinicResponse>>> GetDoctorClinicsAsync(string doctorId)
@@ -440,6 +440,21 @@
             if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
 
             var query = await _doctorService.GetDoctorClinicsAsync(unprotectedDoctorId.Value);
+            query.ForEach(c => c.Id = ProtectId(c.Id));
+            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
+            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
+
+            return Ok(query);
+        }
+
+        // ✅ Get all clinics of a doctor for doctor
+        [HttpGet("clinics")]
+        [HasPermission(Permissions.ViewClinics)]
+        public async Task<ActionResult<IEnumerable<ClinicResponse>>> GetDoctorClinicsAsync()
+        {
+            var doctorId = User.GetUserId();
+            var query = await _doctorService.GetDoctorClinicsForDoctorAsync(doctorId);
+
             query.ForEach(c => c.Id = ProtectId(c.Id));
             query.ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
             query.ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));

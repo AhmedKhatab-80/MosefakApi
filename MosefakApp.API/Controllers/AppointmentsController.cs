@@ -22,6 +22,9 @@
             var query = await _appointmentsService.GetPatientAppointments(userId, status, cancellationToken);
 
             query.ForEach(x => x.Id = ProtectId(x.Id));
+            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
+            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
+            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
 
             return Ok(query);  
         }
@@ -38,6 +41,9 @@
             var query = await _appointmentsService.GetAppointmentById(unprotectedId.Value, cancellationToken);
 
             query.Id = appointmentId;
+            query.DoctorId = ProtectId(query.DoctorId);
+            query.AppointmentType.Id = ProtectId(query.AppointmentType.Id);
+            query.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id));
 
             return Ok(query);
         }
@@ -52,6 +58,9 @@
             var query = await _appointmentsService.GetAppointmentsByDateRange(userId,startDate,endDate, cancellationToken);
 
             query.ForEach(x => x.Id = ProtectId(x.Id));
+            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
+            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
+            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
 
             return Ok(query);
         }
@@ -154,13 +163,18 @@
         [HasPermission(Permissions.BookAppointment)]
         public async Task<ActionResult<bool>> BookAppointment(BookAppointmentRequest request, CancellationToken cancellationToken = default)
         {
-            var unprotectedId = UnprotectId(request.AppointmentTypeId);
-            if (unprotectedId == null)
+            var unprotectedDoctorId = UnprotectId(request.DoctorId);
+            if (unprotectedDoctorId == null)
+                return BadRequest("Invalid ID");
+
+            var unprotectedAppointmentTypeId = UnprotectId(request.AppointmentTypeId);
+            if (unprotectedAppointmentTypeId == null)
                 return BadRequest("Invalid ID");
 
             int appUserId = User.GetUserId();
 
-            request.AppointmentTypeId = unprotectedId.Value.ToString();
+            request.DoctorId = unprotectedDoctorId.Value.ToString();
+            request.AppointmentTypeId = unprotectedAppointmentTypeId.Value.ToString();
             var query = await _appointmentsService.BookAppointment(request, appUserId, cancellationToken);
 
             return Ok(query); 
@@ -187,6 +201,9 @@
             var query = await _appointmentsService.GetDoctorAppointments(doctorId, status, cancellationToken);
 
             query.ForEach(x => x.Id = ProtectId(x.Id));
+            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
+            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
+            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
 
             return Ok(query);
         }
@@ -197,6 +214,11 @@
         {
             int doctorId = User.GetUserId();
             var query = await _appointmentsService.GetPendingAppointmentsForDoctor(doctorId, cancellationToken);
+
+            query.ForEach(x => x.Id = ProtectId(x.Id));
+            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
+            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
+            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
 
             return Ok(query);
         }
@@ -209,6 +231,9 @@
             var query = await _appointmentsService.GetAppointmentsByDateRangeForDoctor(doctorId,startDate,endDate, cancellationToken);
 
             query.ForEach(x => x.Id = ProtectId(x.Id));
+            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
+            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
+            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
 
             return Ok(query);
         }

@@ -5,12 +5,14 @@ namespace MosefakApi.Business.Services.Image
     public class ImageService : IImageService
     {
         private readonly IWebHostEnvironment _environment;
+        private readonly ILoggerService _logger;
         private readonly string _basePath;
 
-        public ImageService(IWebHostEnvironment environment)
+        public ImageService(IWebHostEnvironment environment, ILoggerService logger)
         {
             _environment = environment;
-            _basePath = Path.Combine(_environment.WebRootPath, "images");
+            _basePath = Path.Combine(_environment.WebRootPath);
+            _logger = logger;
         }
 
         public async Task<string> UploadImageOnServer(IFormFile image, bool deleteIfExist = false, string oldPath = null, CancellationToken cancellationToken = default)
@@ -35,22 +37,44 @@ namespace MosefakApi.Business.Services.Image
             return $"images/{uniqueFileName}";
         }
 
-        public Task RemoveImage(string oldPath)
+        public async Task RemoveImage(string oldPath)
         {
             if (string.IsNullOrWhiteSpace(oldPath))
             {
-                return Task.CompletedTask;
+                return;
             }
 
-            string imagePath = Path.Combine(_basePath, oldPath);
+            // 🔹 Ensure the correct absolute path
+            string imagePath = oldPath.StartsWith(_basePath)
+                ? oldPath
+                : Path.Combine(_basePath, oldPath.TrimStart('/').Replace("/", "\\"));
 
+
+            // 🔹 Check if the file exists before deleting
             if (File.Exists(imagePath))
             {
-                File.Delete(imagePath);
-            }
+                try
+                {
+                    // 🔥 Ensure the file is not locked before deleting
+                    File.SetAttributes(imagePath, FileAttributes.Normal);
 
-            return Task.CompletedTask;
+                    // 🔥 Delete the file
+                    File.Delete(imagePath);
+                    _logger.LogInfo($"✅ Successfully deleted: {imagePath}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"❌ Error deleting file: {ex.Message}");
+                    throw new Exception($"Failed to delete file: {imagePath}", ex);
+                }
+            }
+            else
+            {
+                _logger.LogInfo($"⚠️ File not found: {imagePath}");
+            }
         }
+
+
     }
 
 }
