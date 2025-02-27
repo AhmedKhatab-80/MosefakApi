@@ -9,11 +9,12 @@
         private readonly IMapper _mapper;
         private readonly IConfiguration _configuration;
         private readonly ILoggerService _loggerService;
+        private readonly IIdProtectorService _Protector;
         private readonly string _baseUrl;
 
         public AppointmentService(
             IUnitOfWork unitOfWork, UserManager<AppUser> userManager, ICacheService cacheService,
-            IStripeService stripeService, IMapper mapper, ILoggerService loggerService, IConfiguration configuration)
+            IStripeService stripeService, IMapper mapper, ILoggerService loggerService, IIdProtectorService protector, IConfiguration configuration)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
@@ -22,6 +23,7 @@
             _mapper = mapper;
             _configuration = configuration;
             _loggerService = loggerService;
+            _Protector = protector;
             _baseUrl = _configuration["BaseUrl"] ?? "https://default-url.com/";
         }
 
@@ -61,73 +63,53 @@
 
         public async Task<bool> CancelAppointmentByPatient(int patientId, int appointmentId, string? cancellationReason, CancellationToken cancellationToken = default)
         {
-            // 1️⃣ Validate patient existence.
-            var patient = await _userManager.Users
-                .FirstOrDefaultAsync(x => x.Id == patientId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (patient is null)
-            {
-                _loggerService.LogWarning("User with Id {PatientId} does not exist.", patientId);
-                throw new ItemNotFound("User does not exist.");
-            }
-
-            // 2️⃣ Retrieve the appointment including Payment navigation.
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"])
+                .FirstOrDefaultASync(x => x.Id == appointmentId && x.PatientId == patientId, ["Payment"])
                 .ConfigureAwait(false);
 
             if (appointment == null)
-            {
-                _loggerService.LogWarning("Appointment with Id {AppointmentId} not found.", appointmentId);
-                throw new ItemNotFound("Appointment does not exist.");
-            }
+                throw new ItemNotFound("Appointment does not exist or you don't have permission.");
 
-            // 3️⃣ Validate that the appointment is not completed.
             if (appointment.AppointmentStatus == AppointmentStatus.Completed)
-            {
                 throw new BadRequest("Cannot cancel a completed appointment.");
-            }
 
-            // 4️⃣ Set cancellation reason if provided.
-            if (!string.IsNullOrWhiteSpace(cancellationReason))
-            {
-                appointment.CancellationReason = cancellationReason;
-            }
+            if (appointment.AppointmentStatus == AppointmentStatus.CanceledByDoctor ||
+                appointment.AppointmentStatus == AppointmentStatus.CanceledByPatient)
+                throw new BadRequest("Appointment is already canceled.");
 
-            // 5️⃣ Update appointment status and cancellation timestamp.
             appointment.AppointmentStatus = AppointmentStatus.CanceledByPatient;
             appointment.CancelledAt = DateTimeOffset.UtcNow;
+            appointment.CancellationReason = !string.IsNullOrWhiteSpace(cancellationReason) ? cancellationReason : null;
 
-            // 6️⃣ Handle payment refund if applicable.
+            // 🔹 Check if a refund is required
             if (appointment.Payment?.Status == PaymentStatus.Paid)
             {
+                bool refundSucceeded = await _stripeService.RefundPayment(appointment.Payment.StripePaymentIntentId)
+                    .ConfigureAwait(false);
+
+                if (!refundSucceeded)
+                {
+                    _loggerService.LogError("Refund failed for PaymentIntent {PaymentIntentId} on appointment {AppointmentId}.",
+                        appointment.Payment.StripePaymentIntentId, appointmentId);
+                    throw new Exception("Failed to process payment refund.");
+                }
+
+                // ✅ Update Payment Status
                 appointment.Payment.Status = PaymentStatus.Refunded;
-                // TODO: Invoke payment refund service (e.g., _stripeService.RefundPayment(..., cancellationToken))
-                // TODO: Send notification to the patient regarding the refund.
             }
 
-            // 7️⃣ Update the appointment in the repository and commit changes.
-            await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .UpdateEntityAsync(appointment)
-                .ConfigureAwait(false);
-
-            var rowsAffected = await _unitOfWork.CommitAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (rowsAffected <= 0)
-            {
-                _loggerService.LogError("Failed to cancel appointment with Id {AppointmentId}.", appointmentId);
-                throw new Exception("Failed to cancel appointment.");
-            }
-
-            // 8️⃣ Log cancellation and invalidate relevant caches.
-            _loggerService.LogInfo("Appointment {AppointmentId} was cancelled by patient {PatientId}.", appointmentId, patientId);
-
+            await _unitOfWork.CommitAsync(cancellationToken);
             await _cacheService.RemoveCachedResponseAsync("/api/Appointments/canceled-appointments").ConfigureAwait(false);
+
+            _loggerService.LogInfo("Appointment {AppointmentId} was canceled by patient {PatientId}.", appointmentId, patientId);
+
+            // ✅ Notify doctor about the cancellation
+            //await _notificationService.SendNotificationAsync(appointment.DoctorId,
+            //    $"The patient has canceled appointment {appointmentId}. If payment was made, a refund has been processed.");
 
             return true;
         }
+
 
 
         public async Task<List<AppointmentResponse>> GetAppointmentsByDateRange(
@@ -187,7 +169,6 @@
             // Map appointments to response DTOs.
             return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
         }
-
 
 
         public async Task<bool> RescheduleAppointmentAsync(int appointmentId, DateTime selectedDate, TimeSlot newTimeSlot)
@@ -259,7 +240,6 @@
                 }
             });
         }
-
 
 
         public async Task<bool> BookAppointment(BookAppointmentRequest request, int appUserIdFromClaims, CancellationToken cancellationToken = default)
@@ -458,6 +438,7 @@
             // Map appointments to response DTOs.
             return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
         }
+
         public async Task<bool> MarkAppointmentAsCompleted(int appointmentId)
         {
             var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
@@ -503,15 +484,10 @@
             });
         }
 
-
-
-        public async Task<bool> Pay(int appointmentId, CancellationToken cancellationToken = default)
+        public async Task<string> CreatePaymentIntent(int appointmentId, CancellationToken cancellationToken = default)
         {
-            // 1️⃣ Retrieve the appointment (including AppointmentType and Payment).
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(
-                    x => x.Id == appointmentId,
-                    includes: ["AppointmentType", "Payment"])
+                .FirstOrDefaultASync(x => x.Id == appointmentId, includes: ["AppointmentType", "Payment"])
                 .ConfigureAwait(false);
 
             if (appointment == null)
@@ -520,54 +496,88 @@
             if (appointment.AppointmentStatus != AppointmentStatus.PendingPayment)
                 throw new BadRequest("Invalid appointment status for payment.");
 
-            // 2️⃣ Determine the amount to charge from the appointment type.
             decimal amountToCharge = appointment.AppointmentType.ConsultationFee;
 
-            // 3️⃣ Generate PaymentIntentId using the PaymentService.
-            // If this fails, we choose to fail the operation.
-            string paymentIntentId = await _stripeService.GetPaymentIntentId(amountToCharge, appointment.PatientId,appointmentId)
+            // 🔍 Check if a PaymentIntent already exists for this appointment
+            var existingPayment = await _unitOfWork.Repository<Payment>()
+                .FirstOrDefaultASync(x => x.AppointmentId == appointmentId);
+
+            if (existingPayment != null && existingPayment.Status == PaymentStatus.Pending)
+            {
+                return existingPayment.ClientSecret; // ✅ Return existing ClientSecret (Safe for frontend)
+            }
+
+            var protectedAppointmentId = ProtectId(appointmentId.ToString());
+            var protectedPatinetId = ProtectId(appointment.PatientId.ToString());
+
+            // 🔹 Generate new PaymentIntent from Stripe
+            (string paymentIntentId, string clientSecret) = await _stripeService.GetPaymentIntentId(amountToCharge, protectedPatinetId, protectedAppointmentId)
                 .ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(paymentIntentId))
                 throw new Exception("Failed to generate PaymentIntent.");
 
-            // 4️⃣ Create a new Payment entity.
+            // 🔹 Save PaymentIntentId and ClientSecret in the database
             var payment = new Payment
             {
                 AppointmentId = appointmentId,
-                StripePaymentIntentId = paymentIntentId,
+                StripePaymentIntentId = paymentIntentId, // 🔥 Stored securely in DB
+                ClientSecret = clientSecret, // 🔥 Safe for frontend use
                 Amount = amountToCharge,
-                Status = PaymentStatus.Paid
+                Status = PaymentStatus.Pending
             };
 
-            // 5️⃣ Update the appointment's status and associate the new payment.
-            appointment.AppointmentStatus = AppointmentStatus.Confirmed;
-            appointment.Payment = payment;
+            await _unitOfWork.Repository<Payment>().AddEntityAsync(payment);
+            var rowsAffected = await _unitOfWork.CommitAsync(cancellationToken);
 
-            // 6️⃣ Commit changes to the database.
-            var rowsAffected = await _unitOfWork.CommitAsync(cancellationToken)
-                .ConfigureAwait(false);
             if (rowsAffected <= 0)
                 throw new Exception("Payment operation failed.");
 
-            // 7️⃣ Send notifications to patient and doctor.
-            // (Assumes _notificationService is injected and configured.)
-            //await _notificationService.SendNotificationToPatientAsync(
-            //        appointment.PatientId,
-            //        $"Your appointment (ID: {appointment.Id}) has been successfully paid and confirmed.",
-            //        cancellationToken)
-            //    .ConfigureAwait(false);
-
-            //await _notificationService.SendNotificationToDoctorAsync(
-            //        appointment.DoctorId,
-            //        $"Appointment (ID: {appointment.Id}) with your patient has been confirmed.",
-            //        cancellationToken)
-            //    .ConfigureAwait(false);
-
-            _loggerService.LogInfo("Appointment {AppointmentId} payment processed successfully.", appointmentId);
-
-            return true;
+            return clientSecret;
         }
+
+        public async Task<bool> ConfirmAppointmentPayment(int appointmentId, CancellationToken cancellationToken = default)
+        {
+            var strategy = _unitOfWork.CreateExecutionStrategy(); // ✅ Use EF Core Execution Strategy
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+                var payment = await _unitOfWork.Repository<Payment>()
+                    .FirstOrDefaultASync(x => x.AppointmentId == appointmentId);
+
+                if (payment == null)
+                    throw new ItemNotFound("Payment record not found.");
+
+                var paymentIntentId = payment.StripePaymentIntentId;
+                var paymentStatus = await _stripeService.VerifyPaymentStatus(paymentIntentId);
+
+                if (paymentStatus == "error")
+                    throw new Exception("Error verifying payment.");
+
+                if (paymentStatus != "succeeded")
+                    return false; // Payment not completed
+
+                // ✅ Update Payment & Appointment Status
+                payment.Status = PaymentStatus.Paid;
+
+                var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
+                    .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"]);
+
+                if (appointment != null)
+                {
+                    appointment.AppointmentStatus = AppointmentStatus.Confirmed;
+                    appointment.Payment = payment;
+                }
+
+                await _unitOfWork.CommitAsync(cancellationToken);
+                await transaction.CommitAsync(); // ✅ Commit inside execution strategy
+
+                return true;
+            });
+        }
+
 
         public async Task<AppointmentStatus> GetAppointmentStatus(int appointmentId)
         {
@@ -581,7 +591,6 @@
 
         public async Task<bool> CancelAppointmentByDoctor(int appointmentId, string? cancellationReason, CancellationToken cancellationToken = default)
         {
-            // 1️⃣ Retrieve the appointment including Payment details.
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"])
                 .ConfigureAwait(false);
@@ -592,31 +601,22 @@
                 throw new ItemNotFound("Appointment does not exist.");
             }
 
-            // 2️⃣ Validate that the appointment is in a state that can be canceled.
             if (appointment.AppointmentStatus != AppointmentStatus.Confirmed)
             {
-                _loggerService.LogWarning("Attempt to cancel appointment with ID {AppointmentId} with invalid status: {Status}.",
+                _loggerService.LogWarning("Attempt to cancel appointment {AppointmentId} with invalid status: {Status}.",
                     appointmentId, appointment.AppointmentStatus);
-                throw new BadRequest("Invalid appointment: Only confirmed appointments can be canceled by the doctor.");
+                throw new BadRequest("Only confirmed appointments can be canceled by the doctor.");
             }
 
-            // 3️⃣ Set cancellation details.
             appointment.AppointmentStatus = AppointmentStatus.CanceledByDoctor;
             appointment.CancelledAt = DateTimeOffset.UtcNow;
-            if (!string.IsNullOrWhiteSpace(cancellationReason))
-            {
-                appointment.CancellationReason = cancellationReason;
-            }
+            appointment.CancellationReason = cancellationReason ?? appointment.CancellationReason;
 
-            // 4️⃣ Process payment refund if applicable.
             if (appointment.Payment?.Status == PaymentStatus.Paid)
             {
-                appointment.Payment.Status = PaymentStatus.Refunded;
-                _loggerService.LogInfo("Appointment {AppointmentId} payment marked as Refunded.", appointmentId);
-
-                // Invoke payment refund service. If the refund fails, fail the operation.
                 bool refundSucceeded = await _stripeService.RefundPayment(appointment.Payment.StripePaymentIntentId)
                     .ConfigureAwait(false);
+
                 if (!refundSucceeded)
                 {
                     _loggerService.LogError("Refund failed for PaymentIntent {PaymentIntentId} on appointment {AppointmentId}.",
@@ -624,10 +624,10 @@
                     throw new Exception("Failed to process payment refund.");
                 }
 
-                // TODO: Optionally, send a notification to the patient regarding the refund.
+                // ✅ Update Appointment & Payment Status after Refund
+                appointment.Payment.Status = PaymentStatus.Refunded;
             }
 
-            // 5️⃣ Update the appointment and commit changes.
             await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
                 .UpdateEntityAsync(appointment)
                 .ConfigureAwait(false);
@@ -637,16 +637,18 @@
 
             if (rowsAffected <= 0)
             {
-                _loggerService.LogError("Failed to cancel appointment with ID {AppointmentId}.", appointmentId);
+                _loggerService.LogError("Failed to cancel appointment {AppointmentId}.", appointmentId);
                 throw new Exception("Failed to cancel appointment.");
             }
 
-            // 6️⃣ Optionally, send a notification to the patient.
-            // TODO: Send notification to the patient to inform them of the cancellation.
+            // ✅ Notify patient about the cancellation & refund
+            //await _notificationService.SendNotificationAsync(appointment.PatientId,
+            //    $"Your appointment {appointmentId} has been canceled. If applicable, your refund is being processed.");
 
             _loggerService.LogInfo("Appointment {AppointmentId} successfully canceled by doctor.", appointmentId);
             return true;
         }
+
 
 
         public async Task AutoCancelUnpaidAppointments() // Scheduled with Hangfire
@@ -678,7 +680,7 @@
                 foreach (var appointment in expiredAppointments)
                 {
                     appointment.AppointmentStatus = AppointmentStatus.AutoCanceled;
-                    appointment.CancelledAt = DateTime.UtcNow;
+                    appointment.CancelledAt = DateTimeOffset.UtcNow;
                     appointment.CancellationReason = "Payment not completed within the required timeframe.";
 
                     _loggerService.LogWarning($"Auto-canceled appointment (ID: {appointment.Id}) due to unpaid status.");
@@ -743,7 +745,7 @@
                 .ToDictionaryAsync(u => u.Id, cancellationToken);
         }
 
-
+        private string ProtectId(string id) => _Protector.Protect(int.Parse(id));
         private AppointmentResponse MapAppointmentResponse(Appointment appointment, Dictionary<int, DoctorDetails> doctorDetails)
         {
             var doctor = doctorDetails.GetValueOrDefault(appointment.Doctor.AppUserId) ?? new DoctorDetails

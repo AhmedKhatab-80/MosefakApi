@@ -48,7 +48,9 @@
             // appointment
 
             CreateMap<Appointment, AppointmentResponse>().ReverseMap();
-            CreateMap<Appointment, AppointmentDto>().ReverseMap();
+
+            CreateMap<Appointment, AppointmentDto>()
+                .ReverseMap();
 
             // appointment type
 

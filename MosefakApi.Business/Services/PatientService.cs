@@ -1,4 +1,6 @@
-﻿namespace MosefakApi.Business.Services
+﻿using MosefakApp.Core.Dtos.Review.Requests;
+
+namespace MosefakApi.Business.Services
 {
     public class PatientService : IPatientService
     {
@@ -147,6 +149,6 @@
             if (file.Length > maxFileSize)
                 throw new BadRequest("File size exceeds the 2MB limit.");
         }
-    }
 
+    }
 }

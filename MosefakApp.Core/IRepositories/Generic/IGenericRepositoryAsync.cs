@@ -12,6 +12,7 @@
         Task<T> FirstOrDefaultASync(Expression<Func<T, bool>> predicate, string[] includes = null!);
         Task<long> GetCountAsync();
         Task<long> GetCountWithConditionAsync(Expression<Func<T, bool>> condition);
+        Task<long> GetCountWithConditionAsync(Expression<Func<T, bool>> condition, string[] includes = null!);
         Task AddEntityAsync(T entity);
         Task AddRangeAsync(IEnumerable<T> entities);
         Task UpdateEntityAsync(T entity);

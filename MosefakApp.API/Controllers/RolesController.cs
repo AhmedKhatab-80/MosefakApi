@@ -16,7 +16,7 @@
         }
 
         [HttpGet]
-        [HasPermission(Permissions.ViewRoles)]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<ActionResult<IList<RoleResponse>>> Get([FromQuery] bool IncludeDeleted = false)
         {
             var roles = await _roleService.GetRolesAsync(IncludeDeleted);
@@ -27,7 +27,7 @@
         }
 
         [HttpGet("{id}")]
-        [HasPermission(Permissions.ViewRoleById)]
+        [HasPermission(Permissions.Roles.ViewById)]
         public async Task<ActionResult<RoleResponse>> GetById(string id)
         {
             var unprotectedId = UnprotectId(id);
@@ -42,14 +42,14 @@
         }
 
         [HttpPost]
-        [HasPermission(Permissions.CreateRole)]
+        [HasPermission(Permissions.Roles.Create)]
         public async Task<RoleResponse> Add(RoleRequest request)
         {
             return await _roleService.AddRoleAsync(request);
         }
 
         [HttpPut("{id}")]
-        [HasPermission(Permissions.EditRole)]
+        [HasPermission(Permissions.Roles.Edit)]
         public async Task<ActionResult<RoleResponse>> Edit(string id, RoleRequest request)
         {
             var unprotectedId = UnprotectId(id);
@@ -64,7 +64,7 @@
         }
 
         [HttpDelete("{id}")]
-        [HasPermission(Permissions.DeleteRole)]
+        [HasPermission(Permissions.Roles.Delete)]
         public async Task<ActionResult> Delete(string id)
         {
             var unprotectedId = UnprotectId(id);
@@ -78,7 +78,7 @@
         }
 
         [HttpPut("assign-permission/{roleId}")]
-        [HasPermission(Permissions.AssignPermissionToRole)]
+        [HasPermission(Permissions.Roles.AssignPermissionToRole)]
         public async Task<ActionResult<bool>> AssignPermissionToRoleAsync(string roleId, AssignPermissionsRequest request)
         {
             var query = await _roleService.AssignPermissionToRoleAsync(roleId, request);

@@ -560,7 +560,7 @@
                 throw new ItemNotFound("Doctor does not exist.");
 
             var count = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
-                .GetCountWithConditionAsync(a=> a.DoctorId == doctorId);
+                .GetCountWithConditionAsync(a => a.Doctor.AppUserId == doctorId, ["Doctor"]);
 
             return count;
         }
@@ -1528,19 +1528,44 @@
             );
         }
 
-        // 🔹 Private helper method to avoid duplication
         private async Task<List<AppointmentDto>> GetAppointmentsAsync(int doctorId, bool isUpcoming)
         {
             var now = DateTimeOffset.UtcNow;
 
-            var appointments = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>().GetAllAsync(
-                x => x.Doctor.Id == doctorId && (isUpcoming ? x.StartDate > now : x.StartDate < now),
-                includes: ["AppointmentType", "Doctor"]
-            );
+            // 🔹 Fetch Appointments & Join with Patients in One Query
+            var appointments = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+                .GetAllAsync(
+                    x => x.Doctor.AppUserId == doctorId && (isUpcoming ? x.StartDate > now : x.StartDate < now),
+                    includes: ["AppointmentType", "Doctor"]
+                );
 
-            // 🔹 Always return a non-null collection
-            return (List<AppointmentDto>)(appointments?.Select(a => _mapper.Map<AppointmentDto>(a)) ?? Enumerable.Empty<AppointmentDto>());
+            // 🔹 Extract Patient IDs & Fetch Patients in a Single Call
+            var patientIds = appointments.Select(x => x.PatientId).ToHashSet(); // ⚡ Use HashSet for O(1) lookup
+            var patients = await _userManager.Users
+                .Where(x => patientIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.PhoneNumber, x.FirstName, x.LastName })
+                .ToListAsync();
+
+            // 🔹 Convert Patients List to Dictionary for Fast Lookups
+            var patientDict = patients.ToDictionary(x => x.Id, x => x);
+
+            // 🔹 Map Appointments to DTOs Efficiently
+            return appointments.Select(item => new AppointmentDto
+            {
+                Id = item.Id.ToString(),
+                ConsultationFee = item.AppointmentType.ConsultationFee,
+                VisitType = item.AppointmentType.VisitType,
+                Duration = item.AppointmentType.Duration,
+                StartTime = item.StartDate,
+                EndTime = item.EndDate,
+                ProblemDescription = item.ProblemDescription,
+                Status = item.AppointmentStatus,
+                PatientId = patientDict.TryGetValue(item.PatientId, out var user) ? user.Id.ToString() : null!,
+                PatientName = user?.FirstName!+" "+user?.LastName, // ✅ No need for empty string checks
+                PatientPhone = user?.PhoneNumber
+            }).ToList();
         }
+
 
         // 🔥 **Only removes cache; doesn't generate or set cache keys**
         private async Task RemoveCachedDoctorData(int doctorId)

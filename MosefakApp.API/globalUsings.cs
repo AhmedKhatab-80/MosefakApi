@@ -1,4 +1,6 @@
-﻿global using Hangfire;
+﻿global using MosefakApp.Domains.Entities;
+global using Stripe;
+global using Hangfire;
 global using MosefakApi.Business.Services;
 global using Microsoft.AspNetCore.Authorization;
 global using MosefakApi.DependencyInjection;
@@ -6,6 +8,7 @@ global using MosefakApp.API.Extensions;
 global using MosefakApp.API.Filters.Authentication;
 global using MosefakApp.Core.Dtos.AppointmentType.Requests;
 global using System.Text.Json.Serialization;
+global using MosefakApp.Core.Dtos.Review.Requests;
 global using Microsoft.AspNetCore.Mvc;
 global using MosefakApp.Core.Dtos.User.Requests;
 global using MosefakApp.Core.Dtos.User.Responses;

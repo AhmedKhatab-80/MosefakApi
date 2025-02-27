@@ -10,7 +10,8 @@
         Task<bool> CancelAppointmentByPatient(int patientId,int appointmentId, string? cancelationReason, CancellationToken cancellationToken = default); 
         Task<bool> BookAppointment(BookAppointmentRequest request, int appUserId, CancellationToken cancellationToken = default); 
         Task<AppointmentStatus> GetAppointmentStatus(int appointmentId); // Used by: Patients, Doctors, Admins, Background Jobs (Hangfire)
-        Task<bool> Pay(int appointmentId, CancellationToken cancellationToken = default); 
+        Task<string> CreatePaymentIntent(int appointmentId, CancellationToken cancellationToken = default);
+        Task<bool> ConfirmAppointmentPayment(int appointmentId, CancellationToken cancellationToken = default); // if manaully by fron-end not webhooks
 
         // 🔹 Doctor Methods
         Task<List<AppointmentResponse>> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null, CancellationToken cancellationToken = default);

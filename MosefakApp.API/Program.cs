@@ -1,4 +1,5 @@
 ﻿var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddUserSecrets<Program>(); // 👈 Load from User Secrets
 
 // Add services to the container.
 
@@ -38,7 +39,6 @@ builder.Services.AddSwaggerServices();
 
 await builder.Services.Seeding();
 
-
 builder.Services.AddAuthentication(builder.Configuration);
 
 #region For Validation Error
@@ -52,6 +52,20 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// Seed roles and permissions on startup
+//using (var scope = app.Services.CreateScope())
+//{
+//    var serviceProvider = scope.ServiceProvider;
+//    try
+//    {
+//        var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+//        await SeedIdentityData.SeedRolesAndPermissionsAsync(roleManager);
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"Error seeding roles and permissions: {ex.Message}");
+//    }
+//}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

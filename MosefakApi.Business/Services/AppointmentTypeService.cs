@@ -12,7 +12,7 @@
 
         public async Task<List<AppointmentTypeResponse>?> GetAppointmentTypes(int doctorId)
         {
-            var query = await _unitOfWork.Repository<AppointmentType>().GetAllAsync(x=> x.Doctor.Id == doctorId, ["Doctor"]);
+            var query = await _unitOfWork.Repository<AppointmentType>().GetAllAsync(x=> x.Doctor.AppUserId == doctorId, ["Doctor"]);
 
             if (query is null)
                 return null;

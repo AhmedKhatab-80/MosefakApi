@@ -14,7 +14,7 @@
 
         // ✅ Get appointment types for a doctor
         [HttpGet]
-        [HasPermission(Permissions.ViewAppointmentTypes)]
+        [HasPermission(Permissions.AppointmentTypes.View)]
         public async Task<ActionResult<List<AppointmentTypeResponse>?>> GetAppointmentTypes()
         {
             var doctorId = User.GetUserId();
@@ -29,7 +29,7 @@
         }
 
         [HttpPost]
-        [HasPermission(Permissions.AddAppointmentTypes)]
+        [HasPermission(Permissions.AppointmentTypes.Add)]
         public async Task<ActionResult<bool>> AddAppointmentType(AppointmentTypeRequest request)
         {
             var doctorId = User.GetUserId();
@@ -39,7 +39,7 @@
         }
 
         [HttpPut("{protectedId}")]
-        [HasPermission(Permissions.EditAppointmentTypes)]
+        [HasPermission(Permissions.AppointmentTypes.Edit)]
         public async Task<ActionResult<bool>> EditAppointmentType(string protectedId, AppointmentTypeRequest request)
         {
             var unprotectedId = UnprotectId(protectedId);
@@ -51,7 +51,7 @@
         }
 
         [HttpDelete("{protectedId}")]
-        [HasPermission(Permissions.DeleteAppointmentTypes)]
+        [HasPermission(Permissions.AppointmentTypes.Delete)]
         public async Task<ActionResult<bool>> DeleteAppointmentType(string protectedId, CancellationToken cancellationToken)
         {
             var unprotectedId = UnprotectId(protectedId);

@@ -3,6 +3,7 @@ global using Stripe;
 global using MailKit.Net.Smtp;
 global using MailKit.Security;
 global using Microsoft.AspNetCore.DataProtection;
+global using MosefakApp.Core.Dtos.Review.Requests;
 global using Microsoft.AspNetCore.Hosting;
 global using Microsoft.AspNetCore.Http;
 global using Microsoft.AspNetCore.Identity;

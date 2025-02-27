@@ -104,6 +104,19 @@
             return await _entity.LongCountAsync(condition);
         }
 
+        public async Task<long> GetCountWithConditionAsync(Expression<Func<T, bool>> condition, string[] includes = null!)
+        {
+            IQueryable<T> query = _entity.Where(condition).AsQueryable();
+
+            if (includes != null)
+            {
+                foreach (var include in includes)
+                    query = query.Include(include);
+            }
+
+            return await query.LongCountAsync();
+        }
+
         public async Task UpdateEntityAsync(T entity)
         {
             await Task.Run(() =>

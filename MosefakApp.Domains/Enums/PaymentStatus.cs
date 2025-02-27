@@ -10,6 +10,15 @@
         Paid,
 
         [EnumMember(Value = "Refunded")]
-        Refunded
+        Refunded,
+
+        [EnumMember(Value = "Failed")]
+        Failed,
+
+        [EnumMember(Value = "RefundPending")]
+        RefundPending,
+
+        [EnumMember(Value = "RefundFailed")]
+        RefundFailed
     }
 }

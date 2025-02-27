@@ -7,6 +7,6 @@
         public string? Comment { get; set; }
         public string FullName { get; set; } = null!;
         public string ImagePath { get; set; } = null!;
-        public DateTime CreatedAt { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
     }
 }

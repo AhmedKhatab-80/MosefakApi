@@ -15,7 +15,7 @@
         }
 
         [HttpGet("patient")]
-        [HasPermission(Permissions.ViewPatientAppointments)]
+        [HasPermission(Permissions.Appointments.ViewPatientAppointments)]
         public async Task<ActionResult<IEnumerable<AppointmentResponse>?>> GetPatientAppointments([FromQuery]AppointmentStatus? status = null, CancellationToken cancellationToken = default)
         {
             int userId = User.GetUserId();
@@ -30,7 +30,7 @@
         }
 
         [HttpGet("{appointmentId}")]
-        [HasPermission(Permissions.ViewAppointment)]
+        [HasPermission(Permissions.Appointments.View)]
         public async Task<ActionResult<AppointmentResponse>> GetAppointmentById(string appointmentId, CancellationToken cancellationToken = default)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -50,7 +50,7 @@
 
         // Get Appointments by Date Range (Patient)
         [HttpGet("range")]
-        [HasPermission(Permissions.ViewAppointmentsInRange)]
+        [HasPermission(Permissions.Appointments.ViewInRange)]
         public async Task<ActionResult<List<AppointmentResponse>>> GetAppointmentsByDateRange([FromQuery] DateTimeOffset startDate, [FromQuery] DateTimeOffset endDate, CancellationToken cancellationToken = default)
         {
             int userId = User.GetUserId();
@@ -67,7 +67,7 @@
 
 
         [HttpPut("{appointmentId}/approve")]
-        [HasPermission(Permissions.ApproveAppointment)]
+        [HasPermission(Permissions.Appointments.Approve)]
         public async Task<ActionResult<bool>> ApproveAppointmentByDoctor(string appointmentId)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -79,7 +79,7 @@
         }
 
         [HttpPut("{appointmentId}/reject")]
-        [HasPermission(Permissions.RejectAppointment)]
+        [HasPermission(Permissions.Appointments.Reject)]
         public async Task<ActionResult<bool>> RejectAppointmentByDoctor(string appointmentId, RejectAppointmentRequest request)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -92,7 +92,7 @@
         }
 
         [HttpPut("{appointmentId}/complete")]
-        [HasPermission(Permissions.MarkAppointmentAsCompleted)]
+        [HasPermission(Permissions.Appointments.MarkAsCompleted)]
         public async Task<ActionResult<bool>> MarkAppointmentAsCompleted(string appointmentId)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -105,7 +105,7 @@
         }
 
         [HttpDelete("{appointmentId}/doctor-cancel")]
-        [HasPermission(Permissions.CancelAppointmentByDoctor)]
+        [HasPermission(Permissions.Appointments.CancelByDoctor)]
         public async Task<ActionResult<bool>> CancelAppointmentByDoctor(string appointmentId, CancelAppointmentRequest request)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -118,7 +118,7 @@
         }
 
         [HttpPut("{appointmentId}/patient-cancel")]
-        [HasPermission(Permissions.CancelAppointmentByPatient)]
+        [HasPermission(Permissions.Appointments.CancelByPatient)]
         public async Task<ActionResult<bool>> CancelAppointmentAsync(string appointmentId, CancelAppointmentRequest request, CancellationToken token = default)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -133,21 +133,36 @@
         }
 
 
-        [HttpPost("{appointmentId}/pay")]
-        [HasPermission(Permissions.PayForAppointment)]
-        public async Task<ActionResult<bool>> Pay(string appointmentId, CancellationToken cancellationToken = default)
+        [HttpPost("create-payment-intent/{appointmentId}")]
+        [HasPermission(Permissions.Appointments.CreatePaymentIntent)]
+        public async Task<ActionResult<string>> CreatePaymentIntent(string appointmentId, CancellationToken cancellationToken = default)
         {
             var unprotectedId = UnprotectId(appointmentId);
             if (unprotectedId == null)
                 return BadRequest("Invalid ID");
 
-            var query = await _appointmentsService.Pay(unprotectedId.Value, cancellationToken);
+            var clientSecret = await _appointmentsService.CreatePaymentIntent(unprotectedId.Value, cancellationToken);
+ 
+            return Ok(clientSecret);
+        }
+
+        // in case Manually Confirming from Frontend, If webhooks are not used, the frontend calls..
+
+        [HttpPost("confirm-appointment-payment/{appointmentId}")]
+        [HasPermission(Permissions.Appointments.ConfirmPayment)]
+        public async Task<IActionResult> ConfirmAppointmentPayment(string appointmentId, CancellationToken cancellationToken = default)
+        {
+            var unprotectedId = UnprotectId(appointmentId);
+            if (unprotectedId == null)
+                return BadRequest("Invalid ID");
+
+            var query = await _appointmentsService.ConfirmAppointmentPayment(unprotectedId.Value, cancellationToken);
 
             return Ok(query);
         }
 
         [HttpPut("reschedule")]
-        [HasPermission(Permissions.RescheduleAppointment)]
+        [HasPermission(Permissions.Appointments.Reschedule)]
         public async Task<ActionResult<bool>> RescheduleAppointmentAsync(RescheduleAppointmentRequest request)
         {
             var unprotectedId = UnprotectId(request.AppointmentId);
@@ -160,7 +175,7 @@
         }
 
         [HttpPost("book")]
-        [HasPermission(Permissions.BookAppointment)]
+        [HasPermission(Permissions.Appointments.Book)]
         public async Task<ActionResult<bool>> BookAppointment(BookAppointmentRequest request, CancellationToken cancellationToken = default)
         {
             var unprotectedDoctorId = UnprotectId(request.DoctorId);
@@ -181,7 +196,7 @@
         }
 
         [HttpGet("{appointmentId}/status")]
-        [HasPermission(Permissions.ViewAppointmentStatus)]
+        [HasPermission(Permissions.Appointments.ViewStatus)]
         public async Task<ActionResult<AppointmentStatus>> GetAppointmentStatus(string appointmentId)
         {
             var unprotectedId = UnprotectId(appointmentId);
@@ -194,7 +209,7 @@
         }
 
         [HttpGet("doctor")]
-        [HasPermission(Permissions.ViewDoctorAppointments)]
+        [HasPermission(Permissions.Appointments.ViewDoctorAppointments)]
         public async Task<ActionResult<List<AppointmentResponse>>> GetDoctorAppointments(AppointmentStatus? status = null, CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();
@@ -209,7 +224,7 @@
         }
 
         [HttpGet("pending")]
-        [HasPermission(Permissions.ViewPendingAppointmentsForDoctor)]
+        [HasPermission(Permissions.Appointments.ViewPendingForDoctor)]
         public async Task<ActionResult<List<AppointmentResponse>>> GetPendingAppointmentsForDoctor(CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();
@@ -224,7 +239,7 @@
         }
 
         [HttpGet("doctor/range")]
-        [HasPermission(Permissions.ViewAppointmentsForDoctorInRange)]
+        [HasPermission(Permissions.Appointments.ViewInRangeForDoctor)]
         public async Task<ActionResult<List<AppointmentResponse>>> GetAppointmentsByDateRangeForDoctor([FromQuery]DateTimeOffset startDate, [FromQuery] DateTimeOffset endDate, CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();

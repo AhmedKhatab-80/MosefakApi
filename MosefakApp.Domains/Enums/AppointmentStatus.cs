@@ -2,10 +2,10 @@
 {
     public enum AppointmentStatus
     {
-        [EnumMember(Value = "Pending Approval")]
+        [EnumMember(Value = "PendingApproval")]
         PendingApproval,
 
-        [EnumMember(Value = "Pending Payment")]
+        [EnumMember(Value = "PendingPayment")]
         PendingPayment,
 
         [EnumMember(Value = "Confirmed")]
@@ -14,13 +14,13 @@
         [EnumMember(Value = "Completed")]
         Completed,
 
-        [EnumMember(Value = "Canceled By Doctor")]
+        [EnumMember(Value = "CanceledByDoctor")]
         CanceledByDoctor,
 
-        [EnumMember(Value = "Canceled By Patient")]
+        [EnumMember(Value = "CanceledByPatient")]
         CanceledByPatient,
 
-        [EnumMember(Value = "Auto Canceled")]
+        [EnumMember(Value = "AutoCanceled")]
         AutoCanceled
     }
 }
