@@ -63,15 +63,15 @@
             if (paymentIntent == null) return BadRequest();
 
             var payment = await _unitOfWork.Repository<Payment>()
-                .FirstOrDefaultASync(x => x.StripePaymentIntentId == paymentIntent.Id);
+                .FirstOrDefaultAsync(x => x.StripePaymentIntentId == paymentIntent.Id);
 
             if (payment == null) return NotFound(new { message = "Payment not found." });
 
             // ✅ Update Payment & Appointment Status
             payment.Status = PaymentStatus.Paid;
-            
+
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == payment.AppointmentId, ["Payment"]);
+                .FirstOrDefaultAsync(x => x.Id == payment.AppointmentId, query => query.Include(x => x.Payment));
 
             if (appointment != null)
             {
@@ -93,7 +93,7 @@
             if (paymentIntent == null) return BadRequest();
 
             var payment = await _unitOfWork.Repository<Payment>()
-                .FirstOrDefaultASync(x => x.StripePaymentIntentId == paymentIntent.Id);
+                .FirstOrDefaultAsync(x => x.StripePaymentIntentId == paymentIntent.Id);
 
             if (payment == null) return NotFound(new { message = "Payment not found." });
 
@@ -112,12 +112,12 @@
             if (charge == null) return BadRequest();
 
             var payment = await _unitOfWork.Repository<Payment>()
-                .FirstOrDefaultASync(x => x.StripePaymentIntentId == charge.PaymentIntentId);
+                .FirstOrDefaultAsync(x => x.StripePaymentIntentId == charge.PaymentIntentId);
 
             if (payment == null) return NotFound(new { message = "Payment not found." });
 
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == payment.AppointmentId, ["Payment"]);
+                .FirstOrDefaultAsync(x => x.Id == payment.AppointmentId, query => query.Include(x => x.Payment));
 
             if (charge.Refunds.Any(r => r.Status == "succeeded"))
             {

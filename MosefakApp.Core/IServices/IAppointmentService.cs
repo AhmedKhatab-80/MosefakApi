@@ -3,9 +3,9 @@
     public interface IAppointmentService
     {
         // 🔹 Patient Methods
-        Task<List<AppointmentResponse>> GetPatientAppointments(int patientId, AppointmentStatus? status = null, CancellationToken cancellationToken = default);
+        Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetPatientAppointments(int patientId, AppointmentStatus? status = null, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
         Task<AppointmentResponse> GetAppointmentById(int appointmentId, CancellationToken cancellationToken = default);
-        Task<List<AppointmentResponse>> GetAppointmentsByDateRange(int userId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
+        Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetAppointmentsByDateRange(int patientId, DateTimeOffset startDate, DateTimeOffset endDate, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
         Task<bool> RescheduleAppointmentAsync(int appointmentId, DateTime selectedDate, TimeSlot newTimeSlot); 
         Task<bool> CancelAppointmentByPatient(int patientId,int appointmentId, string? cancelationReason, CancellationToken cancellationToken = default); 
         Task<bool> BookAppointment(BookAppointmentRequest request, int appUserId, CancellationToken cancellationToken = default); 
@@ -14,13 +14,13 @@
         Task<bool> ConfirmAppointmentPayment(int appointmentId, CancellationToken cancellationToken = default); // if manaully by fron-end not webhooks
 
         // 🔹 Doctor Methods
-        Task<List<AppointmentResponse>> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null, CancellationToken cancellationToken = default);
-        Task<List<AppointmentResponse>> GetPendingAppointmentsForDoctor(int doctorId, CancellationToken cancellationToken = default); 
+        Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
+        Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetPendingAppointmentsForDoctor(int doctorId, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default); 
         Task<bool> ApproveAppointmentByDoctor(int appointmentId);
         Task<bool> RejectAppointmentByDoctor(int appointmentId, string? rejectionReason);
         Task<bool> CancelAppointmentByDoctor(int appointmentId, string? cancelationReason, CancellationToken cancellationToken = default);
         Task<bool> MarkAppointmentAsCompleted(int appointmentId);
-        Task<List<AppointmentResponse>> GetAppointmentsByDateRangeForDoctor(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
+        Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetAppointmentsByDateRangeForDoctor(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
 
         // 🔹 Utility Methods
         Task AutoCancelUnpaidAppointments(); // Handled by Hangfire

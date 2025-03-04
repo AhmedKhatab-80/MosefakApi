@@ -1,13 +1,17 @@
 ﻿global using AutoMapper;
+global using MosefakApp.Core.Dtos.Pagination;
 global using FluentValidation;
 global using Microsoft.AspNetCore.Http;
 global using Microsoft.EntityFrameworkCore.Storage;
 global using MosefakApp.Core.Abstractions;
 global using MosefakApp.Core.Dtos.Appointment.Requests;
+global using MosefakApp.Core.Dtos.Notification;
 global using MosefakApp.Core.Dtos.Appointment.Responses;
 global using MosefakApp.Core.Dtos.AppointmentType.Requests;
 global using MosefakApp.Core.Dtos.Authentication.Requests;
 global using MosefakApp.Core.Dtos.Authentication.Responses;
+global using Microsoft.AspNetCore.Mvc;
+global using MosefakApp.Core.Dtos.ContactUs;
 global using MosefakApp.Core.Dtos.Award.Requests;
 global using MosefakApp.Core.Dtos.Award.Responses;
 global using MosefakApp.Core.Dtos.BaseValidators;

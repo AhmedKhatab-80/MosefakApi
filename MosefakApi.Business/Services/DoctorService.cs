@@ -1,4 +1,6 @@
-﻿namespace MosefakApi.Business.Services
+﻿using static MosefakApp.Infrastructure.constants.Permissions;
+
+namespace MosefakApi.Business.Services
 {
     public class DoctorService : IDoctorService
     {
@@ -26,21 +28,44 @@
             _baseUrl = _configuration["BaseUrl"] ?? "https://default-url.com/";
         }
 
-        public async Task<List<DoctorResponse>> GetAllDoctors()
+        public async Task<PaginatedResponse<DoctorResponse>> GetAllDoctors(int pageNumber = 1, int pageSize = 10)
         {
-            var doctors = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetAllAsync(includes:["Experiences", "Specializations"]);
+            var doctorRepo = _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>();
 
-            if (doctors == null || !doctors.Any())
-                return new List<DoctorResponse>(); // Return an empty list instead of throwing an exception
+            // Fetch paginated doctors with related entities
+            (var doctors, var totalCount) = await doctorRepo.GetAllAsync(
+                query => query.Include(x => x.Experiences).Include(x => x.Specializations),
+                pageNumber,
+                pageSize);
 
-            // Extract AppUser IDs for doctors
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+            if (!doctors.Any()) // No need for doctors == null check
+            {
+                return new PaginatedResponse<DoctorResponse>
+                {
+                    Data = new List<DoctorResponse>(),
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages
+                };
+            }
+
+            // Extract unique AppUser IDs for batch fetching user details
             var appUserIds = doctors.Select(d => d.AppUserId).ToHashSet();
 
-            // Fetch user details for doctors & reviewers in a **single batch request**
-            var userDetails = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().GetUserDetailsAsync(appUserIds);
+            // Fetch user details in a single batch request
+            var userDetails = await doctorRepo.GetUserDetailsAsync(appUserIds);
 
-            // Map the results
-            return doctors.Select(d => MapDoctorResponse(d, userDetails)).ToList();
+            // Map results and return paginated response
+            return new PaginatedResponse<DoctorResponse>
+            {
+                Data = doctors.Select(d => MapDoctorResponse(d, userDetails)).ToList(),
+                TotalPages = totalPages,
+                PageSize = pageSize,
+                CurrentPage = pageNumber
+            };
         }
 
 
@@ -94,78 +119,141 @@
 
         public async Task CompleteDoctorProfile(int appUserIdFromClaims, CompleteDoctorProfileRequest doctorRequest, CancellationToken cancellationToken = default)
         {
-            using var transactionScope = new TransactionScope(
-                TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
-                TransactionScopeAsyncFlowOption.Enabled
-            );
+            var strategy = _unitOfWork.CreateExecutionStrategy();
 
-            var user = await _userRepository.GetUserByIdAsync(appUserIdFromClaims)
-                ?? throw new ItemNotFound("This doctor is not registered!");
-
-            if (await _unitOfWork.Repository<Doctor>().AnyAsync(d => d.AppUserId == appUserIdFromClaims))
-                throw new BadRequest("Doctor profile has already been completed!");
-
-            var doctor = _mapper.Map<Doctor>(doctorRequest);
-            doctor.AppUserId = appUserIdFromClaims;
-
-            doctor.Clinics = doctorRequest.Clinics?.Select(c => new Clinic
+            await strategy.ExecuteAsync(async () =>
             {
-                Name = c.Name,
-                Street = c.Street,
-                City = c.City,
-                Country = c.Country,
-                ApartmentOrSuite = c.ApartmentOrSuite,
-                Landmark = c.Landmark,
-                PhoneNumber = c.PhoneNumber,
-                WorkingTimes = c.WorkingTimes?.Select(w => new WorkingTime
+                await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+                var user = await _userRepository.GetUserByIdAsync(appUserIdFromClaims)
+                    ?? throw new ItemNotFound("This doctor is not registered!");
+
+                if (await _unitOfWork.Repository<Doctor>().AnyAsync(d => d.AppUserId == appUserIdFromClaims))
+                    throw new BadRequest("Doctor profile has already been completed!");
+
+                var doctor = _mapper.Map<Doctor>(doctorRequest);
+                doctor.AppUserId = appUserIdFromClaims;
+
+                List<string> uploadedImages = new();
+
+                try
                 {
-                    Day = w.Day,
-                    Periods = w.Periods.Select(p => new Period { StartTime = p.StartTime, EndTime = p.EndTime }).ToList()
-                }).ToList() ?? new()
-            }).ToList() ?? new();
+                    // 🔹 Validate & Upload Clinic Images
+                    doctor.Clinics = new List<Clinic>();
+                    foreach (var clinicRequest in doctorRequest.Clinics)
+                    {
+                        string? clinicImagePath = null, logoPath = null;
 
-            doctor.Specializations = doctorRequest.Specializations?
-                .Select(s => new Specialization { Name = s.Name, Category = s.Category })
-                .ToList() ?? new();
+                        if (clinicRequest.ClinicImage != null)
+                        {
+                            ValidateImageFile(clinicRequest.ClinicImage);
+                            clinicImagePath = await _imageService.UploadImageOnServer(clinicRequest.ClinicImage, false, null, cancellationToken);
+                            uploadedImages.Add(clinicImagePath);
+                        }
 
-            doctor.AppointmentTypes = doctorRequest.AppointmentTypes?
-                .Select(a => new AppointmentType { Duration = a.Duration, VisitType = a.VisitType, ConsultationFee = a.ConsultationFee })
-                .ToList() ?? new();
+                        if (clinicRequest.LogoPath != null)
+                        {
+                            ValidateImageFile(clinicRequest.LogoPath);
+                            logoPath = await _imageService.UploadImageOnServer(clinicRequest.LogoPath, false, null, cancellationToken);
+                            uploadedImages.Add(logoPath);
+                        }
 
-            var universityLogos = await Task.WhenAll(doctorRequest.Educations
-                .Where(e => e.UniversityLogoPath is not null)
-                .Select(async e => new { e, Path = await _imageService.UploadImageOnServer(e.UniversityLogoPath, false, null!, cancellationToken) }));
+                        doctor.Clinics.Add(new Clinic
+                        {
+                            Name = clinicRequest.Name,
+                            Street = clinicRequest.Street,
+                            City = clinicRequest.City,
+                            Country = clinicRequest.Country,
+                            ApartmentOrSuite = clinicRequest.ApartmentOrSuite,
+                            Landmark = clinicRequest.Landmark,
+                            PhoneNumber = clinicRequest.PhoneNumber,
+                            ClinicImage = clinicImagePath,
+                            LogoPath = logoPath,
+                            WorkingTimes = clinicRequest.WorkingTimes?.Select(w => new WorkingTime
+                            {
+                                Day = w.Day,
+                                Periods = w.Periods.Select(p => new Period { StartTime = p.StartTime, EndTime = p.EndTime }).ToList()
+                            }).ToList() ?? new()
+                        });
+                    }
 
-            doctor.Educations = doctorRequest.Educations?
-                .Select(e => new Education
+                    // 🔹 Validate & Upload University Logos (Education)
+                    doctor.Educations = new List<Education>();
+                    foreach (var educationRequest in doctorRequest.Educations ?? new())
+                    {
+                        string? universityLogoPath = null;
+
+                        if (educationRequest.UniversityLogoPath != null)
+                        {
+                            ValidateImageFile(educationRequest.UniversityLogoPath);
+                            universityLogoPath = await _imageService.UploadImageOnServer(educationRequest.UniversityLogoPath,false,null, cancellationToken);
+                            uploadedImages.Add(universityLogoPath);
+                        }
+
+                        doctor.Educations.Add(new Education
+                        {
+                            Degree = educationRequest.Degree,
+                            Major = educationRequest.Major,
+                            UniversityName = educationRequest.UniversityName,
+                            UniversityLogoPath = universityLogoPath,
+                            Location = educationRequest.Location,
+                            StartDate = educationRequest.StartDate,
+                            EndDate = educationRequest.EndDate,
+                            CurrentlyStudying = educationRequest.CurrentlyStudying
+                        });
+                    }
+
+                    // 🔹 Validate & Upload Hospital Logos (Experience)
+                    doctor.Experiences = new List<Experience>();
+                    foreach (var experienceRequest in doctorRequest.Experiences ?? new())
+                    {
+                        string? hospitalLogoPath = null;
+
+                        if (experienceRequest.HospitalLogo != null)
+                        {
+                            ValidateImageFile(experienceRequest.HospitalLogo);
+                            hospitalLogoPath = await _imageService.UploadImageOnServer(experienceRequest.HospitalLogo, false, null, cancellationToken);
+                            uploadedImages.Add(hospitalLogoPath);
+                        }
+
+                        doctor.Experiences.Add(new Experience
+                        {
+                            Title = experienceRequest.Title,
+                            HospitalName = experienceRequest.HospitalName,
+                            HospitalLogo = hospitalLogoPath,
+                            Location = experienceRequest.Location,
+                            EmploymentType = experienceRequest.EmploymentType,
+                            JobDescription = experienceRequest.JobDescription,
+                            StartDate = experienceRequest.StartDate,
+                            EndDate = experienceRequest.EndDate,
+                            CurrentlyWorkingHere = experienceRequest.CurrentlyWorkingHere
+                        });
+                    }
+
+                    await _unitOfWork.Repository<Doctor>().AddEntityAsync(doctor);
+                    await _unitOfWork.CommitAsync();
+
+                    var roles = await _userManager.GetRolesAsync(user);
+                    await _userManager.RemoveFromRolesAsync(user, roles);
+                    await _userManager.AddToRoleAsync(user, DefaultRole.Doctor);
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
                 {
-                    Degree = e.Degree,
-                    Major = e.Major,
-                    UniversityName = e.UniversityName,
-                    UniversityLogoPath = universityLogos.FirstOrDefault(u => u.e == e)?.Path,
-                    Location = e.Location,
-                    StartDate = e.StartDate,
-                    EndDate = e.EndDate,
-                    CurrentlyStudying = e.CurrentlyStudying,
-                    AdditionalNotes = e.AdditionalNotes
-                }).ToList() ?? new();
+                    await transaction.RollbackAsync();
 
-            await _unitOfWork.Repository<Doctor>().AddEntityAsync(doctor);
-            await _unitOfWork.CommitAsync();
+                    // 🔹 Rollback Uploaded Images if Failure Occurs
+                    foreach (var imagePath in uploadedImages)
+                    {
+                        await _imageService.RemoveImage(imagePath);
+                    }
 
-            // assign him to doctor role after removing assigned default roles
-
-            var roles = await _userManager.GetRolesAsync(user);
-            await _userManager.RemoveFromRolesAsync(user, roles);
-            await _userManager.AddToRoleAsync(user, DefaultRole.Doctor);
-
-            transactionScope.Complete();
-
-            // ✅ Remove relevant cache entries after completing the doctor profile
-
-            await RemoveCachedDoctorData(doctor.Id);
+                    throw new BadRequest("Failed to complete doctor profile.", ex);
+                }
+            });
         }
+
 
 
         public async Task<DoctorProfileResponse> GetDoctorProfile(int appUserIdFromClaims)
@@ -195,7 +283,7 @@
 
                     // 2) Fetch Doctor from Business Database
                     var doctorRepo = _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>();
-                    var doctor = await doctorRepo.FirstOrDefaultASync(x => x.AppUserId == appUserIdFromClaims);
+                    var doctor = await doctorRepo.FirstOrDefaultAsync(x => x.AppUserId == appUserIdFromClaims);
                     if (doctor is null)
                         throw new ItemNotFound("This profile does not exist!");
 
@@ -308,14 +396,14 @@
         {
             // Step 1: Fetch Doctor's Working Periods for the Selected Clinic & Day
             var workingTime = await _unitOfWork.Repository<WorkingTime>()
-                .FirstOrDefaultASync(wt => wt.ClinicId == clinicId && wt.Day == selectedDay, includes: ["Periods"]);
+                .FirstOrDefaultAsync(wt => wt.ClinicId == clinicId && wt.Day == selectedDay, query => query.Include(x => x.Periods));
 
             if (workingTime is null || !workingTime.Periods.Any())
                 return new List<TimeSlot>(); // No working periods available.
 
             // Step 2: Fetch Appointment Type Duration (in minutes)
             var appointmentType = await _unitOfWork.Repository<AppointmentType>()
-                .FirstOrDefaultASync(at => at.Id == appointmentTypeId);
+                .FirstOrDefaultAsync(at => at.Id == appointmentTypeId);
 
             if (appointmentType is null)
                 throw new BadRequest("Invalid appointment type");
@@ -436,8 +524,8 @@
         public async Task<bool> UpdateWorkingTimesAsync(int doctorId, int clinicId, IEnumerable<WorkingTimeRequest> workingTimes) // [Done]
         {
             // 🔹 Fetch clinic along with WorkingTimes & Periods
-            var clinic = await _unitOfWork.GetCustomRepository<IClinicRepository>().FirstOrDefaultASync(x => x.Id == clinicId && 
-                                                                                        x.Doctor.AppUserId == doctorId, ["WorkingTimes" , "WorkingTimes.Periods","Doctor"]);
+            var clinic = await _unitOfWork.GetCustomRepository<IClinicRepository>().FirstOrDefaultAsync(x => x.Id == clinicId && 
+                                                                                        x.Doctor.AppUserId == doctorId, query => query.Include(x => x.WorkingTimes).ThenInclude(x => x.Periods).Include(x => x.Doctor));
 
             if (clinic is null)
                 throw new ItemNotFound("Clinic does not exist or you do not have permission to modify it.");
@@ -495,41 +583,60 @@
             }
         }
 
-        public async Task<List<DoctorResponse>> SearchDoctorsAsync(DoctorSearchFilter filter)
+        public async Task<PaginatedResponse<DoctorResponse>> SearchDoctorsAsync(DoctorSearchFilter filter, int pageNumber = 1, int pageSize = 10)
         {
             if (string.IsNullOrWhiteSpace(filter.Name))
-                return new List<DoctorResponse>();
+                return new PaginatedResponse<DoctorResponse>
+                {
+                    CurrentPage = pageNumber,
+                    Data = [],
+                    PageSize = pageSize,
+                    TotalPages = 0
+                };
 
             var normalizedName = filter.Name.Trim().ToLower();
 
-            // 🔹 Fetch users matching the search filter
+            // Fetch matching users
             var users = await _userRepository.GetAllUsersAsync(x =>
-                (x.FirstName + " " + x.LastName).ToLower().Contains(normalizedName));
+                EF.Functions.Like(x.FirstName + " " + x.LastName, $"%{normalizedName}%"));
 
             if (!users.Any())
-                return new List<DoctorResponse>();
+                return new PaginatedResponse<DoctorResponse>
+                {
+                    CurrentPage = pageNumber,
+                    Data = [],
+                    PageSize = pageSize,
+                    TotalPages = 0
+                };
 
-            // 🔹 Create a dictionary for fast lookup
+            // Create dictionary for fast lookup
             var userDictionary = users.ToDictionary(
                 u => u.Id,
                 u => new
                 {
                     FullName = $"{u.FirstName} {u.LastName}",
-                    ImagePath = _baseUrl + (string.IsNullOrWhiteSpace(u.ImagePath) ? "default.jpg" : $"{u.ImagePath}")
+                    ImagePath = _baseUrl + (!string.IsNullOrWhiteSpace(u.ImagePath) ? u.ImagePath : "default.jpg")
                 });
 
-            var userIds = users.Select(x => x.Id).ToList();
+            var userIds = users.Select(x => x.Id);
 
-            // 🔹 Retrieve doctor details
-            var doctors = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>()
-                                           .GetAllAsync(d => userIds.Contains(d.AppUserId), ["Specializations", "Experiences"]);
+            // Retrieve doctor details with paging
+            var (doctors, totalCount) = await _unitOfWork
+                .GetCustomRepository<DoctorRepositoryAsync>()
+                .GetAllAsync(
+                    d => userIds.Contains(d.AppUserId),
+                    query => query.Include(x => x.Specializations).Include(x => x.Experiences),
+                    pageNumber,
+                    pageSize);
 
-            // 🔹 Map the final result
-            return doctors.Select(d => new DoctorResponse
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+            // Map the final result
+            var doctorResponse = doctors.Select(d => new DoctorResponse
             {
                 Id = d.Id.ToString(),
-                FullName = userDictionary[d.AppUserId].FullName, // ✅ Directly use existing data
-                ImagePath = userDictionary[d.AppUserId].ImagePath, // ✅ Avoid extra query
+                FullName = userDictionary[d.AppUserId].FullName,
+                ImagePath = userDictionary[d.AppUserId].ImagePath,
                 TotalYearsOfExperience = d.TotalYearsOfExperience,
                 Specializations = d.Specializations.Select(x => new SpecializationResponse
                 {
@@ -539,17 +646,41 @@
                 }).ToList(),
                 NumberOfReviews = d.NumberOfReviews,
             }).ToList();
+
+            return new PaginatedResponse<DoctorResponse>
+            {
+                Data = doctorResponse,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            };
         }
 
 
-        public async Task<List<AppointmentDto>?> GetUpcomingAppointmentsAsync(int doctorId)
+        public async Task<PaginatedResponse<AppointmentDto>> GetUpcomingAppointmentsAsync(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            return await GetAppointmentsAsync(doctorId, isUpcoming: true);
+            (var response,var totalPages) = await GetAppointmentsAsync(doctorId, isUpcoming: true, pageNumber, pageSize);
+
+            return new PaginatedResponse<AppointmentDto>
+            {
+                Data = response,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            };
         }
 
-        public async Task<List<AppointmentDto>?> GetPastAppointmentsAsync(int doctorId)
+        public async Task<PaginatedResponse<AppointmentDto>> GetPastAppointmentsAsync(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            return await GetAppointmentsAsync(doctorId, isUpcoming: false);
+            (var response, var totalPages) = await GetAppointmentsAsync(doctorId, isUpcoming: false, pageNumber, pageSize);
+
+            return new PaginatedResponse<AppointmentDto>
+            {
+                Data = response,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            };
         }
 
         public async Task<long> GetTotalAppointmentsAsync(int doctorId)
@@ -560,7 +691,7 @@
                 throw new ItemNotFound("Doctor does not exist.");
 
             var count = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
-                .GetCountWithConditionAsync(a => a.Doctor.AppUserId == doctorId, ["Doctor"]);
+                .GetCountWithConditionAsync(a => a.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
             return count;
         }
@@ -568,7 +699,7 @@
         public async Task<bool> AddSpecializationAsync(int doctorId, SpecializationRequest request)
         {
             var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.AppUserId == doctorId, ["Specializations"]);
+                .FirstOrDefaultAsync(x => x.AppUserId == doctorId, query => query.Include(x => x.Specializations));
 
             if (doctor is null)
                 throw new ItemNotFound("Doctor does not exist.");
@@ -589,7 +720,7 @@
 
         public async Task<bool> RemoveSpecializationAsync(int doctorId, int specializationId)
         {
-            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultASync(x => x.Id == specializationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultAsync(x => x.Id == specializationId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
             if (specialization == null)
                 throw new ItemNotFound("Specialization is not exist");
@@ -605,8 +736,8 @@
 
         public async Task<bool> EditSpecializationAsync(int doctorId, int specializationId, SpecializationRequest request)
         {
-            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultASync(x => x.Id == specializationId &&
-                                                                                                          x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var specialization = await _unitOfWork.Repository<Specialization>().FirstOrDefaultAsync(x => x.Id == specializationId &&
+                                                                                                          x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
             if (specialization == null)
                 throw new ItemNotFound("Specialization is not exist");
@@ -633,7 +764,7 @@
             return await strategy.ExecuteAsync(async () =>
             {
                 // 🔹 Fetch Doctor 
-                var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().FirstOrDefaultASync(x => x.AppUserId == doctorId, ["Experiences"]);
+                var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>().FirstOrDefaultAsync(x => x.AppUserId == doctorId, query => query.Include(x => x.Experiences));
                 if (doctor is null)
                     throw new ItemNotFound("Doctor does not exist.");
 
@@ -699,7 +830,7 @@
             {
                 // 🔹 Ensure Experience Exists for the Given Doctor
                 var experience = await _unitOfWork.Repository<Experience>()
-                    .FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+                    .FirstOrDefaultAsync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
                 if (experience is null)
                     throw new ItemNotFound("Experience does not exist.");
@@ -770,7 +901,7 @@
             return await strategy.ExecuteAsync(async () =>
             {
                 var experience = await _unitOfWork.Repository<Experience>()
-                    .FirstOrDefaultASync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+                    .FirstOrDefaultAsync(x => x.Id == experienceId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
                 if (experience is null)
                     throw new ItemNotFound("Experience does not exist.");
@@ -798,7 +929,7 @@
         public async Task<bool> AddAwardAsync(int doctorId, AwardRequest request, CancellationToken cancellationToken = default)
         {
             // 🔹 Step 1: Ensure Doctor Exists
-            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultAsync(x => x.AppUserId == doctorId);
             if (doctor is null)
                 throw new ItemNotFound("Doctor does not exist.");
 
@@ -858,7 +989,7 @@
                 throw new BadRequest("Title and Organization fields are required.");
 
             // 🔹 Step 2: Fetch Award with Doctor Validation
-            var award = await _unitOfWork.Repository<Award>().FirstOrDefaultASync(a => a.Id == awardId && a.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var award = await _unitOfWork.Repository<Award>().FirstOrDefaultAsync(a => a.Id == awardId && a.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
             if (award == null)
                 throw new ItemNotFound("Award does not exist or does not belong to this doctor.");
 
@@ -893,7 +1024,7 @@
         public async Task<bool> RemoveAwardAsync(int doctorId, int awardId)
         {
             // 🔹 Step 1: Fetch Award with Doctor Validation
-            var award = await _unitOfWork.Repository<Award>().FirstOrDefaultASync(a => a.Id == awardId && a.Doctor.AppUserId == doctorId, ["Doctor"]);
+            var award = await _unitOfWork.Repository<Award>().FirstOrDefaultAsync(a => a.Id == awardId && a.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
             if (award == null)
                 throw new ItemNotFound("Award does not exist or does not belong to this doctor.");
@@ -915,7 +1046,7 @@
             return await strategy.ExecuteAsync(async () =>
             {
                 // 🔹 Step 1: Ensure Doctor Exists
-                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultAsync(x => x.AppUserId == doctorId);
                 if (doctor is null)
                     throw new ItemNotFound("Doctor does not exist.");
 
@@ -939,7 +1070,10 @@
                 {
                     // 🔹 Step 3: Upload University Logo (if provided)
                     if (request.UniversityLogoPath is not null)
+                    {
+                        ValidateImageFile(request.UniversityLogoPath);
                         newImagePath = await _imageService.UploadImageOnServer(request.UniversityLogoPath, false, null!, cancellationToken);
+                    }
 
                     // 🔹 Step 4: Create & Add New Education Entry
                     var education = new Education
@@ -987,7 +1121,7 @@
             {
                 // 🔹 Step 1: Ensure Education Exists & Belongs to Doctor
                 var education = await _unitOfWork.Repository<Education>()
-                    .FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+                    .FirstOrDefaultAsync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
                 if (education is null)
                     throw new ItemNotFound("Education record does not exist or you have no permission.");
@@ -997,7 +1131,10 @@
 
                 // 🔹 Step 2: Upload New Image (if provided)
                 if (request.UniversityLogoPath != null)
+                {
+                    ValidateImageFile(request.UniversityLogoPath);
                     newImagePath = await _imageService.UploadImageOnServer(request.UniversityLogoPath, false, oldImagePath, cancellationToken);
+                }
 
                 // 🔹 Step 3: Update Education Entity
                 education.StartDate = request.StartDate;
@@ -1052,7 +1189,7 @@
             {
                 // 🔹 Step 1: Ensure Education Exists & Belongs to Doctor
                 var education = await _unitOfWork.Repository<Education>()
-                    .FirstOrDefaultASync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+                    .FirstOrDefaultAsync(x => x.Id == educationId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
                 if (education is null)
                     throw new ItemNotFound("Doctor does not exist or you have no permission.");
@@ -1085,7 +1222,7 @@
             return await strategy.ExecuteAsync(async () =>
             {
                 // 🔹 Step 1: Ensure Doctor Exists
-                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+                var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultAsync(x => x.AppUserId == doctorId);
                 if (doctor is null)
                     throw new ItemNotFound("Doctor does not exist.");
 
@@ -1110,10 +1247,16 @@
                 {
                     // 🔹 Step 3: Upload Images (If Provided)
                     if (request.ClinicImage != null)
+                    {
+                        ValidateImageFile(request.ClinicImage);
                         clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, null!, cancellationToken);
+                    }
 
                     if (request.LogoPath != null)
+                    {
+                        ValidateImageFile(request.LogoPath);
                         clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, null!, cancellationToken);
+                    }
 
                     // 🔹 Step 4: Create Clinic Entity
                     var clinic = new Clinic
@@ -1188,9 +1331,9 @@
             {
                 // 🔹 Step 1: Retrieve Clinic with Related Entities using UnitOfWork
                 var clinicRepo = _unitOfWork.Repository<Clinic>();
-                var clinic = await clinicRepo.FirstOrDefaultASync(
+                var clinic = await clinicRepo.FirstOrDefaultAsync(
                     x => x.Id == clinicId && x.Doctor.AppUserId == doctorId,
-                    ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
+                     query => query.Include(x => x.WorkingTimes).ThenInclude(x => x.Periods).Include(x => x.Doctor));
 
                 if (clinic == null)
                     throw new ItemNotFound("Clinic does not exist or you have no permission.");
@@ -1227,12 +1370,14 @@
 
                     if (request.ClinicImage != null)
                     {
+                        ValidateImageFile(request.ClinicImage);
                         clinicNewPath = await _imageService.UploadImageOnServer(request.ClinicImage, false, oldClinicImagePath, cancellationToken);
                         clinic.ClinicImage = clinicNewPath;
                     }
 
                     if (request.LogoPath != null)
                     {
+                        ValidateImageFile(request.LogoPath);
                         clinicNewLogoPath = await _imageService.UploadImageOnServer(request.LogoPath, false, oldLogoPath, cancellationToken);
                         clinic.LogoPath = clinicNewLogoPath;
                     }
@@ -1353,7 +1498,7 @@
             {
                 // 🔹 Step 1: Retrieve the Clinic
                 var clinic = await _unitOfWork.Repository<Clinic>()
-                    .FirstOrDefaultASync(x => x.Id == clinicId && x.Doctor.AppUserId == doctorId, ["Doctor"]);
+                    .FirstOrDefaultAsync(x => x.Id == clinicId && x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor));
 
                 if (clinic is null)
                     throw new ItemNotFound("Clinic does not exist or you have no permission.");
@@ -1391,10 +1536,15 @@
         }
 
 
-        public async Task<List<ClinicResponse>> GetDoctorClinicsAsync(int doctorId)
+        public async Task<PaginatedResponse<ClinicResponse>> GetDoctorClinicsAsync(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var clinics = await _unitOfWork.Repository<Clinic>()
-                .GetAllAsync(c => c.DoctorId == doctorId, ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
+            (var clinics, var totalCount) = await _unitOfWork.Repository<Clinic>()
+                .GetAllAsync(c => c.DoctorId == doctorId,
+                 query => query.Include(x => x.WorkingTimes).ThenInclude(x => x.Periods).Include(x => x.Doctor),
+                 pageNumber,
+                 pageSize);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if(clinics?.Count > 0)
             {
@@ -1403,16 +1553,33 @@
                 map.ForEach(x => x.ClinicImage = !string.IsNullOrEmpty(x.ClinicImage) ? $"{_baseUrl}{x.ClinicImage}" : $"{_baseUrl}default.jpg");
                 map.ForEach(x => x.LogoPath = !string.IsNullOrEmpty(x.LogoPath) ? $"{_baseUrl}{x.LogoPath}" : $"{_baseUrl}default.jpg");
 
-                return map;
+                return new PaginatedResponse<ClinicResponse>
+                {
+                    Data = map,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                };
             }
 
-            return new List<ClinicResponse>();
+            return new PaginatedResponse<ClinicResponse>
+            {
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+                Data = new List<ClinicResponse>()
+            };
         }
 
-        public async Task<List<ClinicResponse>> GetDoctorClinicsForDoctorAsync(int doctorId)
+        public async Task<PaginatedResponse<ClinicResponse>> GetDoctorClinicsForDoctorAsync(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var clinics = await _unitOfWork.Repository<Clinic>()
-                .GetAllAsync(c => c.Doctor.AppUserId == doctorId, ["WorkingTimes", "WorkingTimes.Periods", "Doctor"]);
+            (var clinics, var totalCount) = await _unitOfWork.Repository<Clinic>()
+                .GetAllAsync(c => c.Doctor.AppUserId == doctorId,
+                query => query.Include(x => x.WorkingTimes).ThenInclude(x => x.Periods).Include(x => x.Doctor),
+                pageNumber,
+                pageSize);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (clinics?.Count > 0)
             {
@@ -1421,28 +1588,33 @@
                 map.ForEach(x => x.ClinicImage = !string.IsNullOrEmpty(x.ClinicImage) ? $"{_baseUrl}{x.ClinicImage}" : $"{_baseUrl}default.jpg");
                 map.ForEach(x => x.LogoPath = !string.IsNullOrEmpty(x.LogoPath) ? $"{_baseUrl}{x.LogoPath}" : $"{_baseUrl}default.jpg");
 
-                return map;
+                return new PaginatedResponse<ClinicResponse>
+                {
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                    Data = map
+                };
             }
 
-            return new List<ClinicResponse>();
-        }
-
-        public async Task<List<ReviewResponse>?> GetDoctorReviewsAsync(int doctorId)
-        {
-            var reviews = await _unitOfWork.Repository<Review>().GetAllAsync(r => r.DoctorId == doctorId);
-
-            return (reviews?.Count > 0 ? _mapper.Map<List<ReviewResponse>>(reviews.ToList()) : new List<ReviewResponse>());
+            return new PaginatedResponse<ClinicResponse>
+            {
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+                Data = new List<ClinicResponse>()
+            };
         }
 
         public async Task<double> GetAverageRatingAsync(int doctorId)
         {
-            return await _unitOfWork.Repository<Review>().GetAverage(r => r.Rate, r => r.DoctorId == doctorId);
+            return await _unitOfWork.Repository<Review>().GetAverageAsync(r => r.Rate, r => r.DoctorId == doctorId);
         }
 
         public async Task<long> GetTotalPatientsServedAsync(int doctorId)
         {
             // 🔹 Step 1: Ensure Doctor Exists
-            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultASync(x => x.AppUserId == doctorId);
+            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultAsync(x => x.AppUserId == doctorId);
             if (doctor is null)
                 throw new ItemNotFound("Doctor does not exist.");
 
@@ -1451,59 +1623,134 @@
                 x => x.DoctorId == doctor.Id && x.AppointmentStatus == AppointmentStatus.Completed);
         }
 
-        public async Task<List<SpecializationResponse>?> GetSpecializations(int doctorId)
+        public async Task<PaginatedResponse<SpecializationResponse>> GetSpecializations(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var query = await _unitOfWork.Repository<Specialization>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            (var query,var totalCount) = await _unitOfWork.Repository<Specialization>()
+                .GetAllAsync(x => x.Doctor.AppUserId == doctorId,
+                query => query.Include(x => x.Doctor),
+                pageNumber,
+                pageSize);
 
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+          
             if (query is null)
-                return null;
+                return new PaginatedResponse<SpecializationResponse>
+                {
+                    Data = new List<SpecializationResponse>(),
+                    PageSize = pageSize,
+                    CurrentPage = pageNumber,
+                    TotalPages = totalPages
+                };
 
             var response = _mapper.Map<List<SpecializationResponse>>(query);
 
-            return response;
+            return new PaginatedResponse<SpecializationResponse>
+            {
+                Data = response,
+                PageSize = pageSize,
+                CurrentPage = pageNumber,
+                TotalPages = totalPages
+            };
         }
 
-        public async Task<List<ExperienceResponse>?> GetExperiences(int doctorId)
+        public async Task<PaginatedResponse<ExperienceResponse>> GetExperiences(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var query = await _unitOfWork.Repository<Experience>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            (var query,var totalCount) = await _unitOfWork.Repository<Experience>()
+                .GetAllAsync(x => x.Doctor.AppUserId == doctorId,
+                query => query.Include(x => x.Doctor),
+                pageNumber,
+                pageSize);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (query is null)
-                return null;
+                return new PaginatedResponse<ExperienceResponse>
+                {
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                    Data = new List<ExperienceResponse>()
+                };
 
             var response = _mapper.Map<List<ExperienceResponse>>(query);
             response.ForEach(ex => ex.HospitalLogo = !string.IsNullOrEmpty(ex.HospitalLogo) ? $"{_baseUrl}{ex.HospitalLogo}" : $"{_baseUrl}default.jpg");
 
-            return response;
+            return new PaginatedResponse<ExperienceResponse>
+            {
+                Data = response,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
-        public async Task<List<AwardResponse>?> GetAwards(int doctorId)
+        public async Task<PaginatedResponse<AwardResponse>> GetAwards(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var query = await _unitOfWork.Repository<Award>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            (var query, var totalCount) = await _unitOfWork.Repository<Award>()
+                                                   .GetAllAsync(x => x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor),
+                                                   pageNumber,
+                                                   pageSize);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (query is null)
-                return null;
+                return new PaginatedResponse<AwardResponse>
+                {
+                    Data = new List<AwardResponse>(),
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                };
 
             var response = _mapper.Map<List<AwardResponse>>(query);
 
-            return response;
+            return new PaginatedResponse<AwardResponse>
+            {
+                Data = response,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
-        public async Task<List<EducationResponse>?> GetEducations(int doctorId)
+        public async Task<PaginatedResponse<EducationResponse>> GetEducations(int doctorId, int pageNumber = 1, int pageSize = 10)
         {
-            var query = await _unitOfWork.Repository<Education>().GetAllAsync(x => x.Doctor.AppUserId == doctorId, ["Doctor"]);
+            (var query, var totalCount) = await _unitOfWork.Repository<Education>()
+                            .GetAllAsync(x => x.Doctor.AppUserId == doctorId, query => query.Include(x => x.Doctor),
+                            pageNumber,
+                            pageSize);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (query is null)
-                return null;
+                return new PaginatedResponse<EducationResponse>()
+                {
+                    Data = new List<EducationResponse>(),
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                };
 
             var response = _mapper.Map<List<EducationResponse>>(query);
             response.ForEach(ex => ex.UniversityLogoPath = !string.IsNullOrEmpty(ex.UniversityLogoPath) ? $"{_baseUrl}{ex.UniversityLogoPath}" : $"{_baseUrl}default.jpg");
 
-            return response;
+            return new PaginatedResponse<EducationResponse>
+            {
+                Data = response,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
-        public Task<DoctorEarningsResponse> GetEarningsReportAsync(int doctorId, DateTime startDate, DateTime endDate)
+        public async Task<DoctorEarningsResponse> GetEarningsReportAsync(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
         {
-            throw new NotImplementedException();
+            var query = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().GetEarningsReportAsync(doctorId, startDate, endDate);
+
+            if (query is null)
+                return new DoctorEarningsResponse();
+
+            return query;
         }
 
         private void ValidateImageFile(IFormFile file)
@@ -1528,15 +1775,17 @@
             );
         }
 
-        private async Task<List<AppointmentDto>> GetAppointmentsAsync(int doctorId, bool isUpcoming)
+        private async Task<(List<AppointmentDto> response,int totalPages)> GetAppointmentsAsync(int doctorId, bool isUpcoming, int pageNumber = 1, int pageSize = 10)
         {
             var now = DateTimeOffset.UtcNow;
 
             // 🔹 Fetch Appointments & Join with Patients in One Query
-            var appointments = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
+            (var appointments,var totalCount) = await _unitOfWork.GetCustomRepository<AppointmentRepositoryAsync>()
                 .GetAllAsync(
                     x => x.Doctor.AppUserId == doctorId && (isUpcoming ? x.StartDate > now : x.StartDate < now),
-                    includes: ["AppointmentType", "Doctor"]
+                    query => query.Include(x => x.AppointmentType).Include(x => x.Doctor),
+                    pageNumber,
+                    pageSize
                 );
 
             // 🔹 Extract Patient IDs & Fetch Patients in a Single Call
@@ -1546,11 +1795,13 @@
                 .Select(x => new { x.Id, x.PhoneNumber, x.FirstName, x.LastName })
                 .ToListAsync();
 
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
             // 🔹 Convert Patients List to Dictionary for Fast Lookups
             var patientDict = patients.ToDictionary(x => x.Id, x => x);
 
             // 🔹 Map Appointments to DTOs Efficiently
-            return appointments.Select(item => new AppointmentDto
+            var response = appointments.Select(item => new AppointmentDto
             {
                 Id = item.Id.ToString(),
                 ConsultationFee = item.AppointmentType.ConsultationFee,
@@ -1564,6 +1815,8 @@
                 PatientName = user?.FirstName!+" "+user?.LastName, // ✅ No need for empty string checks
                 PatientPhone = user?.PhoneNumber
             }).ToList();
+
+            return (response, totalPages);
         }
 
 

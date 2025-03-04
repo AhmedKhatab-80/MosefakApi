@@ -5,6 +5,5 @@
         public int PatientId { get; set; }
         public string FullName { get; set; } = string.Empty;
         public int TotalAppointments { get; set; }
-        public decimal TotalSpent { get; set; }
     }
 }

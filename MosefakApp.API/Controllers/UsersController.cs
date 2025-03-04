@@ -15,18 +15,39 @@
             _idProtectorService = idProtectorService;
         }
 
-        // ✅ Get All Users
         [HttpGet]
         [HasPermission(Permissions.Users.View)]
-        public async Task<ActionResult<IList<UserResponse>>> GetAllUsers([FromQuery] bool includeDeleted = false)
+        public async Task<ActionResult<PaginatedResponse<UserResponse>>> GetAllUsers(
+        [FromQuery] bool includeDeleted = false,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
-            var users = await _userService.GetUsersAsync(includeDeleted);
+            // Fetch paginated users
+            var (users, totalPages) = await _userService.GetUsersAsync(includeDeleted, pageNumber, pageSize);
 
-            // Protect IDs in the response
+            if (users == null || !users.Any())
+            {
+                return Ok(new PaginatedResponse<UserResponse>
+                {
+                    Data = new List<UserResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+
+            // Protect sensitive IDs
             users.ForEach(user => user.Id = ProtectId(user.Id));
 
-            return Ok(users);
+            return Ok(new PaginatedResponse<UserResponse>
+            {
+                Data = users,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
+
 
         // ✅ Get User By Encrypted ID
         [HttpGet("{id}")]
@@ -95,6 +116,18 @@
             await _userService.UnLock(unprotectedId.Value);
             return Ok();
         }
+
+        [HttpPost("update-fcm-token")]
+        [Authorize]
+        public async Task<IActionResult> UpdateFcmToken([FromBody] UpdateFcmTokenDto model)
+        {
+            var userId = User.GetUserId();
+
+            var query = await _userService.UpdateFcmToken(userId, model);
+
+            return Ok(query);
+        }
+
 
         // 🔥 Reusable Helper Method for ID Protection
         private int? UnprotectId(string protectedId) => _idProtectorService.UnProtect(protectedId);

@@ -15,18 +15,40 @@
         // ✅ Get appointment types for a doctor
         [HttpGet]
         [HasPermission(Permissions.AppointmentTypes.View)]
-        public async Task<ActionResult<List<AppointmentTypeResponse>?>> GetAppointmentTypes()
+        public async Task<ActionResult<PaginatedResponse<AppointmentTypeResponse>>> GetAppointmentTypes(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
-            var doctorId = User.GetUserId();
+            int doctorId = User.GetUserId();
 
-            var appointmentTypes = await _appointmentTypeService.GetAppointmentTypes(doctorId);
+            // Fetch paginated appointment types
+            var (appointmentTypes, totalPages) = await _appointmentTypeService.GetAppointmentTypes(
+                doctorId, pageNumber, pageSize);
 
-            if (appointmentTypes == null)
-                return Ok();
+            if (appointmentTypes == null || !appointmentTypes.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentTypeResponse>
+                {
+                    Data = new List<AppointmentTypeResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
 
+            // Protect sensitive IDs
             appointmentTypes.ForEach(a => a.Id = ProtectId(a.Id));
-            return Ok(appointmentTypes);
+
+            // Return a paginated response
+            return Ok(new PaginatedResponse<AppointmentTypeResponse>
+            {
+                Data = appointmentTypes,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
+
 
         [HttpPost]
         [HasPermission(Permissions.AppointmentTypes.Add)]

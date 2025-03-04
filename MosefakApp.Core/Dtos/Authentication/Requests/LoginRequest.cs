@@ -10,5 +10,6 @@
         [MinLength(8, ErrorMessage = Errors.PasswordMinLength)]
         [RegularExpression(RegexPatterns.PasswordPattern, ErrorMessage = Errors.PasswordRegExp)]
         public string Password { get; set; } = null!;
+        public string? FcmToken { get; set; }  // Accept FCM token from Flutter
     }
 }

@@ -1,4 +1,6 @@
-﻿namespace MosefakApi.Business.Services.User
+﻿using static MosefakApp.Infrastructure.constants.Permissions;
+
+namespace MosefakApi.Business.Services.User
 {
     public class UserService : IUserService
     {
@@ -45,7 +47,8 @@
         #endregion
 
         #region get users with roles that belong them 
-        public async Task<List<UserResponse>> GetUsersAsync(bool IncludeDeleted = false)
+        public async Task<(List<UserResponse> responses, int totalPages)> GetUsersAsync(
+        bool IncludeDeleted = false, int pageNumber = 1, int pageSize = 10)
         {
             var query = _context.Users.AsQueryable();
 
@@ -54,26 +57,37 @@
                 query = query.Where(x => !x.IsDeleted);
             }
 
-            var users = await (from u in query
-                               select new UserResponse
-                               {
-                                   Id = u.Id.ToString(),
-                                   FullName = u.FirstName +' '+ u.LastName,
-                                   Email = u.Email!,
-                                   IsDisabled = u.IsDisabled,
-                                   Roles = (from ur in _context.UserRoles
-                                            join r in _context.Roles
-                                            on ur.RoleId equals r.Id
-                                            where ur.UserId == u.Id
-                                            select r.Name).ToList()!
-                               })
-                              .ToListAsync();
+            // Get total count before pagination
+            int totalRecords = await query.CountAsync();
+            if (totalRecords == 0)
+                throw new ItemNotFound("No users exist");
 
-            if (users is null)
-                throw new ItemNotFound("Not Exist Users");
+            // Apply pagination
+            var users = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(u => new UserResponse
+                {
+                    Id = u.Id.ToString(),
+                    FullName = u.FirstName + " " + u.LastName,
+                    Email = u.Email!,
+                    IsDisabled = u.IsDisabled,
+                    Roles = _context.UserRoles
+                        .Where(ur => ur.UserId == u.Id)
+                        .Join(_context.Roles,
+                              ur => ur.RoleId,
+                              r => r.Id,
+                              (ur, r) => r.Name)
+                        .ToList()!
+                })
+                .ToListAsync();
 
-            return users;
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+
+            return (users, totalPages);
         }
+
         #endregion
 
         #region get users with roles that belong them with another implementaion but talk database so much to execute query while join talk to database once.
@@ -187,7 +201,7 @@
             if (emailExist)
                 throw new ItemAlreadyExist("Email already exist");
 
-            var allowedRoles = await _roleService.GetRolesAsync();
+            (var allowedRoles, var totalCount) = await _roleService.GetRolesAsync();
 
             if (request.Roles.Except(allowedRoles.Select(x => x.Name)).Any())
             {
@@ -236,7 +250,7 @@
             if (request is null)
                 throw new BadRequest("Data can't be null");
 
-            var allowedRoles = await _roleService.GetRolesAsync();
+            (var allowedRoles, var totalCount) = await _roleService.GetRolesAsync();
 
             if (request.Roles.Except(allowedRoles.Select(x => x.Name)).Any())
             {
@@ -327,7 +341,19 @@
         #endregion
 
        
-       
+        public async Task<bool> UpdateFcmToken(int userId, UpdateFcmTokenDto model)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) throw new ItemNotFound("User not found");
+
+            user.FcmToken = model.FcmToken;
+            var result = await _userManager.UpdateAsync(user);
+
+            if(result.Succeeded)
+                return true;
+
+            return false;
+        }
         public Task ChangeEmail(ChangeEmailRequest changeEmailRequest)
         {
             throw new NotImplementedException();

@@ -15,18 +15,24 @@
             _idProtectorService = idProtectorService;
         }
 
-        // ✅ Get all doctors
         [HttpGet]
         [HasPermission(Permissions.Doctors.View)]
-        public async Task<ActionResult<List<DoctorResponse>>> GetAllDoctors()
+        public async Task<ActionResult<PaginatedResponse<DoctorResponse>>> GetAllDoctors(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
-            var doctors = await _doctorService.GetAllDoctors();
+            var response = await _doctorService.GetAllDoctors(pageNumber, pageSize);
 
-            doctors.ForEach(d => d.Id = ProtectId(d.Id));
-            doctors.ForEach(d => d.Specializations.ForEach(s => s.Id = ProtectId(s.Id)));
+            // Protect sensitive IDs
+            response.Data.ToList().ForEach(d =>
+            {
+                d.Id = ProtectId(d.Id);
+                d.Specializations?.ForEach(s => s.Id = ProtectId(s.Id)); // Null-safe check
+            });
 
-            return Ok(doctors);
+            return Ok(response);
         }
+
 
         // ✅ Get doctor by ID
         [HttpGet("{doctorId}")]
@@ -46,11 +52,27 @@
         // ✅ Search doctors
         [HttpPost("search")]
         [HasPermission(Permissions.Doctors.Search)]
-        public async Task<ActionResult<List<DoctorResponse>>> SearchDoctorsAsync([FromBody] DoctorSearchFilter filter)
+        public async Task<ActionResult<PaginatedResponse<DoctorResponse>>> SearchDoctorsAsync(
+            [FromBody] DoctorSearchFilter filter,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var query = await _doctorService.SearchDoctorsAsync(filter);
-            query.ForEach(doc=> doc.Id = ProtectId(doc.Id));
-            query.ForEach(d => d.Specializations.ForEach(s => s.Id = ProtectId(s.Id)));
+            var query = await _doctorService.SearchDoctorsAsync(filter,pageNumber,pageSize);
+           
+            if (query?.Data != null)
+            {
+                foreach (var doc in query.Data)
+                {
+                    doc.Id = ProtectId(doc.Id);
+                    if (doc.Specializations != null)
+                    {
+                        foreach (var s in doc.Specializations)
+                        {
+                            s.Id = ProtectId(s.Id);
+                        }
+                    }
+                }
+            }
 
             return Ok(query);
         }
@@ -93,15 +115,17 @@
         // ✅ Get upcoming appointments
         [HttpGet("appointments/upcoming")]
         [HasPermission(Permissions.Doctors.ViewUpcomingAppointments)]
-        public async Task<ActionResult<List<AppointmentDto>>> GetUpcomingAppointmentsAsync()
+        public async Task<ActionResult<PaginatedResponse<AppointmentDto>>> GetUpcomingAppointmentsAsync(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
-            var query = await _doctorService.GetUpcomingAppointmentsAsync(userId);
+            var query = await _doctorService.GetUpcomingAppointmentsAsync(userId, pageNumber, pageSize);
 
             if(query is not null)
             {
-                query.ForEach(a => a.Id = ProtectId(a.Id));
-                query.ForEach(a => a.PatientId = ProtectId(a.PatientId));
+                query.Data.ToList().ForEach(a => a.Id = ProtectId(a.Id));
+                query.Data.ToList().ForEach(a => a.PatientId = ProtectId(a.PatientId));
             }
 
             return Ok(query);
@@ -111,15 +135,17 @@
         // ✅ Get past appointments
         [HttpGet("appointments/past")]
         [HasPermission(Permissions.Doctors.ViewPastAppointments)]
-        public async Task<ActionResult<List<AppointmentDto>>> GetPastAppointmentsAsync()
+        public async Task<ActionResult<PaginatedResponse<AppointmentDto>>> GetPastAppointmentsAsync(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetPastAppointmentsAsync(userId);
 
             if (query is not null)
             {
-                query.ForEach(a => a.Id = ProtectId(a.Id));
-                query.ForEach(a => a.PatientId = ProtectId(a.PatientId));
+                query.Data.ToList().ForEach(a => a.Id = ProtectId(a.Id));
+                query.Data.ToList().ForEach(a => a.PatientId = ProtectId(a.PatientId));
             }
 
             return Ok(query);
@@ -148,12 +174,14 @@
 
         [HttpGet("specializations")]
         [HasPermission(Permissions.Specializations.View)]
-        public async Task<ActionResult<List<SpecializationResponse>?>> GetSpecializations()
+        public async Task<ActionResult<PaginatedResponse<SpecializationResponse>>> GetSpecializations(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetSpecializations(userId);
             if(query != null)
-                query.ForEach(s => s.Id = ProtectId(s.Id));
+                query.Data.ToList().ForEach(s => s.Id = ProtectId(s.Id));
             return Ok(query);
         }
 
@@ -263,12 +291,14 @@
 
         [HttpGet("awards")]
         [HasPermission(Permissions.Awards.View)]
-        public async Task<ActionResult<List<AwardResponse>?>> GetAwards()
+        public async Task<ActionResult<PaginatedResponse<AwardResponse>>> GetAwards(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetAwards(userId);
             if (query != null)
-                query.ForEach(s => s.Id = ProtectId(s.Id));
+                query.Data.ToList().ForEach(s => s.Id = ProtectId(s.Id));
             return Ok(query);
         }
 
@@ -308,12 +338,14 @@
 
         [HttpGet("educations")]
         [HasPermission(Permissions.Educations.View)]
-        public async Task<ActionResult<List<EducationResponse>?>> GetEducations()
+        public async Task<ActionResult<PaginatedResponse<EducationResponse>>> GetEducations(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetEducations(userId);
             if (query != null)
-                query.ForEach(s => s.Id = ProtectId(s.Id));
+                query.Data.ToList().ForEach(s => s.Id = ProtectId(s.Id));
             return Ok(query);
         }
 
@@ -353,12 +385,14 @@
 
         [HttpGet("experiences")]
         [HasPermission(Permissions.Experiences.View)]
-        public async Task<ActionResult<List<ExperienceResponse>?>> GetExperiences()
+        public async Task<ActionResult<PaginatedResponse<ExperienceResponse>>> GetExperiences(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
             var userId = User.GetUserId();
             var query = await _doctorService.GetExperiences(userId);
             if (query != null)
-                query.ForEach(s => s.Id = ProtectId(s.Id));
+                query.Data.ToList().ForEach(s => s.Id = ProtectId(s.Id));
             return Ok(query);
         }
 
@@ -435,15 +469,18 @@
         // ✅ Get all clinics of a doctor for patient
         [HttpGet("{doctorId}/clinics")]
         [HasPermission(Permissions.Clinics.View)]
-        public async Task<ActionResult<IEnumerable<ClinicResponse>>> GetDoctorClinicsAsync(string doctorId)
+        public async Task<ActionResult<PaginatedResponse<ClinicResponse>>> GetDoctorClinicsAsync(
+            string doctorId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var unprotectedDoctorId = UnprotectId(doctorId);
             if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
 
             var query = await _doctorService.GetDoctorClinicsAsync(unprotectedDoctorId.Value);
-            query.ForEach(c => c.Id = ProtectId(c.Id));
-            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
-            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
+            query.Data.ToList().ForEach(c => c.Id = ProtectId(c.Id));
+            query.Data.ToList().ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
+            query.Data.ToList().ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
 
             return Ok(query);
         }
@@ -451,34 +488,19 @@
         // ✅ Get all clinics of a doctor for doctor
         [HttpGet("clinics")]
         [HasPermission(Permissions.Clinics.View)]
-        public async Task<ActionResult<IEnumerable<ClinicResponse>>> GetDoctorClinicsAsync()
+        public async Task<ActionResult<PaginatedResponse<ClinicResponse>>> GetDoctorClinicsAsync(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.GetDoctorClinicsForDoctorAsync(doctorId);
 
-            query.ForEach(c => c.Id = ProtectId(c.Id));
-            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
-            query.ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
+            query.Data.ToList().ForEach(c => c.Id = ProtectId(c.Id));
+            query.Data.ToList().ForEach(c => c.WorkingTimes.ForEach(x => x.Id = ProtectId(x.Id)));
+            query.Data.ToList().ForEach(c => c.WorkingTimes.ForEach(x => x.Periods.ForEach(p => p.Id = ProtectId(p.Id))));
 
             return Ok(query);
         }
-
-        // ✅ Get doctor reviews
-        [HttpGet("reviews/{doctorId}")]
-        [HasPermission(Permissions.Doctors.ViewReviews)]
-        public async Task<ActionResult<List<ReviewResponse>?>> GetDoctorReviewsAsync(string doctorId)
-        {
-            var unprotectedDoctorId = UnprotectId(doctorId);
-            if (unprotectedDoctorId == null) return BadRequest("Invalid Doctor ID");
-
-            var query = await _doctorService.GetDoctorReviewsAsync(unprotectedDoctorId.Value);
-
-            if (query is not null)
-                query.ForEach(r => r.Id = ProtectId(r.Id));
-
-            return Ok(query);
-        }
-
 
         // ✅ Get average rating
         [HttpGet("reviews/{doctorId}/average-rating")]
@@ -504,7 +526,7 @@
         // ✅ Get doctor's earnings
         [HttpGet("earnings-report")]
         [HasPermission(Permissions.Doctors.ViewEarningsReport)]
-        public async Task<ActionResult<DoctorEarningsResponse>> GetEarningsReportAsync([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        public async Task<ActionResult<DoctorEarningsResponse>> GetEarningsReportAsync([FromQuery] DateTimeOffset startDate, [FromQuery] DateTimeOffset endDate)
         {
             var doctorId = User.GetUserId();
             var query = await _doctorService.GetEarningsReportAsync(doctorId, startDate, endDate);

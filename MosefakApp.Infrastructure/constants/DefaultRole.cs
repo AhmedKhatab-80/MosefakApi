@@ -13,5 +13,10 @@
         public const int PatientId = 3;
         public const string Patient = "Patient";
         public const string PatientConcurrencyStamp = "D8008DB7-F389-4541-BBA4-7CD4EB900954";
+
+        public const int PendingDoctorId = 4;
+        public const string PendingDoctor = "PendingDoctor";
+        public const string PendingDoctorConcurrencyStamp = "D8008DB7-F389-4541-BBA4-7CD4EB900994";
+
     }
 }

@@ -5,12 +5,14 @@
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<AppUser> _userManager;
         private readonly IConfiguration _configuration;
+        private readonly IFirebaseService _firebaseService;
         private readonly string _basePath;
-        public ReviewService(IUnitOfWork unitOfWork, UserManager<AppUser> userManager, IConfiguration configuration)
+        public ReviewService(IUnitOfWork unitOfWork, UserManager<AppUser> userManager, IConfiguration configuration, IFirebaseService firebaseService)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _configuration = configuration;
+            _firebaseService = firebaseService;
             _basePath = _configuration["BaseUrl"]!;
         }
 
@@ -49,13 +51,18 @@
             }).ToList();
         }
 
-        /// <summary>
-        /// Adds a new review for a doctor.
-        /// </summary>
         public async Task<bool> AddReview(int patientId, int doctorId, ReviewRequest request, CancellationToken cancellationToken = default)
         {
-            if (!await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>().AnyAsync(x => x.Id == doctorId))
-                throw new ItemNotFound("Doctor does not exist.");
+            var doctor = await _unitOfWork.GetCustomRepository<DoctorRepositoryAsync>()
+                .FirstOrDefaultAsync(x => x.Id == doctorId);
+
+            var patient = await _userManager.Users
+                .Where(x => x.Id == patientId)
+                .Select(x => new { x.FirstName, x.LastName })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (doctor == null || patient == null)
+                throw new ItemNotFound("Doctor or Patient does not exist.");
 
             var review = new Review
             {
@@ -66,15 +73,44 @@
             };
 
             await _unitOfWork.Repository<Review>().AddEntityAsync(review);
-            return await _unitOfWork.CommitAsync(cancellationToken) > 0;
+            await _unitOfWork.CommitAsync(cancellationToken); // ✅ Save Review first
+
+            var doctorUser = await _userManager.Users
+                .Where(x => x.Id == doctor.AppUserId)
+                .Select(x => new { x.FcmToken })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (doctorUser?.FcmToken == null)
+                return true; // ✅ No need to send notification if no FCM token
+
+            var notificationTitle = "New Review Received";
+            var notificationMessage = $"Patient {patient.FirstName} {patient.LastName} left a review.";
+
+            var notificationSent = await _firebaseService.SendNotificationAsync(doctorUser.FcmToken, notificationTitle, notificationMessage);
+
+            if (notificationSent)
+            {
+                await _unitOfWork.Repository<Notification>().AddEntityAsync(new Notification
+                {
+                    UserId = doctor.AppUserId,
+                    Title = notificationTitle,
+                    Message = notificationMessage
+                });
+
+                await _unitOfWork.CommitAsync(cancellationToken);
+            }
+
+            return true;
         }
+
+
 
         /// <summary>
         /// Updates an existing review.
         /// </summary>
         public async Task<bool> EditReview(int reviewId, ReviewRequest request, CancellationToken cancellationToken = default)
         {
-            var review = await _unitOfWork.Repository<Review>().FirstOrDefaultASync(x => x.Id == reviewId)
+            var review = await _unitOfWork.Repository<Review>().FirstOrDefaultAsync(x => x.Id == reviewId)
                 ?? throw new ItemNotFound("Review does not exist.");
 
             review.Comment = request.Comment;
@@ -89,7 +125,7 @@
         /// </summary>
         public async Task<bool> RemoveReview(int reviewId, CancellationToken cancellationToken = default)
         {
-            var review = await _unitOfWork.Repository<Review>().FirstOrDefaultASync(x => x.Id == reviewId)
+            var review = await _unitOfWork.Repository<Review>().FirstOrDefaultAsync(x => x.Id == reviewId)
                 ?? throw new ItemNotFound("Review does not exist.");
 
             await _unitOfWork.Repository<Review>().DeleteEntityAsync(review);

@@ -14,8 +14,11 @@
             _Context = context;
         }
 
+
+
         #region get roles without claims that has it
-        public async Task<IList<RoleResponse>> GetRolesAsync(bool IncludeDeleted = false)
+        public async Task<(IList<RoleResponse> responses, int totalPages)> GetRolesAsync(
+        bool IncludeDeleted = false, int pageNumber = 1, int pageSize = 10)
         {
             var rolesQuery = _roleManager.Roles.AsQueryable();
 
@@ -24,25 +27,36 @@
                 rolesQuery = rolesQuery.Where(x => !x.IsDeleted);
             }
 
-            var rolesResponse = await rolesQuery.Select(x => new RoleResponse
-            {
-                Id = x.Id.ToString(),
-                Name = x.Name!,
-                IsDeleted = x.IsDeleted,
-            })
-                .ToListAsync();
-
-            if (!rolesResponse.Any())
+            // Get total records before pagination
+            int totalRecords = await rolesQuery.CountAsync();
+            if (totalRecords == 0)
             {
                 throw new ItemNotFound("No roles exist.");
             }
 
-            return rolesResponse;
+            // Apply pagination before fetching data
+            var rolesResponse = await rolesQuery
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new RoleResponse
+                {
+                    Id = x.Id.ToString(),
+                    Name = x.Name!,
+                    IsDeleted = x.IsDeleted
+                })
+                .ToListAsync();
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+
+            return (rolesResponse, totalPages);
         }
+
         #endregion
 
         #region get roles with claims that has it
-        public async Task<IList<RoleResponse>> GetRolesAsync2(bool IncludeDeleted = false)
+        public async Task<(IList<RoleResponse> responses, int totalPages)> GetRolesWithPermissionsAsync(
+         bool IncludeDeleted = false, int pageNumber = 1, int pageSize = 10)
         {
             var rolesQuery = _roleManager.Roles.AsQueryable();
 
@@ -51,7 +65,18 @@
                 rolesQuery = rolesQuery.Where(x => !x.IsDeleted);
             }
 
-            var roles = await rolesQuery.ToListAsync();
+            // Get total records before pagination
+            int totalRecords = await rolesQuery.CountAsync();
+            if (totalRecords == 0)
+            {
+                throw new ItemNotFound("No roles exist.");
+            }
+
+            // Fetch roles with pagination
+            var roles = await rolesQuery
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
             var rolesResponse = (from r in roles
                                  join c in _Context.RoleClaims
@@ -65,14 +90,12 @@
                                  })
                                  .ToList();
 
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
 
-            if (!rolesResponse.Any())
-            {
-                throw new ItemNotFound("No roles exist.");
-            }
-
-            return rolesResponse;
+            return (rolesResponse, totalPages);
         }
+
         #endregion
 
         #region get roles with claims that has it by another implementaion but not the best as performance beacuse talk database so many to execute query
@@ -131,7 +154,7 @@
         #endregion
 
         #region Get Role with Claims that has it by another implementation...
-        public async Task<RoleResponse> GetRoleByIdAsync3(int id)
+        public async Task<RoleResponse> GetRoleByIdWithPermissionsAsync(int id)
         {
             var roleResponse = await (from r in _roleManager.Roles
                                       where r.Id == id

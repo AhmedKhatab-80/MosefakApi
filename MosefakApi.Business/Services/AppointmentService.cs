@@ -10,11 +10,12 @@
         private readonly IConfiguration _configuration;
         private readonly ILoggerService _loggerService;
         private readonly IIdProtectorService _Protector;
+        private readonly IFirebaseService _firebaseService;
         private readonly string _baseUrl;
 
         public AppointmentService(
             IUnitOfWork unitOfWork, UserManager<AppUser> userManager, ICacheService cacheService,
-            IStripeService stripeService, IMapper mapper, ILoggerService loggerService, IIdProtectorService protector, IConfiguration configuration)
+            IStripeService stripeService, IMapper mapper, ILoggerService loggerService, IIdProtectorService protector, IConfiguration configuration, IFirebaseService firebaseService)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
@@ -25,34 +26,40 @@
             _loggerService = loggerService;
             _Protector = protector;
             _baseUrl = _configuration["BaseUrl"] ?? "https://default-url.com/";
+            _firebaseService = firebaseService;
         }
 
-        public async Task<List<AppointmentResponse>> GetPatientAppointments(int userIdFromClaims, AppointmentStatus? status = null, CancellationToken cancellationToken = default)
+        public async Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetPatientAppointments(
+            int userIdFromClaims, AppointmentStatus? status = null,
+            int pageNumber = 1, int pageSize = 10,CancellationToken cancellationToken = default)
         {
-            var appointments = await FetchPatientAppointments(userIdFromClaims, status);
-            if (!appointments.Any()) return new List<AppointmentResponse>();
+            (var appointments,var totalPages) = await FetchPatientAppointments(userIdFromClaims, status, pageNumber, pageSize);
+
+            if (!appointments.Any()) return (new List<AppointmentResponse>(), totalPages);
 
             var doctorAppUserIds = appointments.Select(a => a.Doctor.AppUserId).Distinct().ToList();
             var doctorDetails = await FetchDoctorDetails(doctorAppUserIds, cancellationToken);
 
-            return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
+            return (appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList(), totalPages);
         }
 
-        public async Task<List<AppointmentResponse>> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null, CancellationToken cancellationToken = default)
+        public async Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetDoctorAppointments(int doctorId, AppointmentStatus? status = null,
+            int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
-            var appointments = await FetchDoctorAppointments(doctorId, status);
-            if (!appointments.Any()) return new List<AppointmentResponse>();
+            (var appointments, var totalPages) = await FetchDoctorAppointments(doctorId, status, pageNumber, pageSize);
+            if (!appointments.Any()) return (new List<AppointmentResponse>(), totalPages);
 
             var doctorAppUserIds = appointments.Select(a => a.Doctor.AppUserId).Distinct().ToList();
 
             var doctorDetails = await FetchDoctorDetails(doctorAppUserIds, cancellationToken);
 
-            return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
+            return (appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList(), totalPages);
         }
+
         public async Task<AppointmentResponse> GetAppointmentById(int appointmentId, CancellationToken cancellationToken = default)
         {
             var appointment = await _unitOfWork.Repository<Appointment>()
-                .FirstOrDefaultASync(x => x.Id == appointmentId, ["AppointmentType", "Doctor", "Doctor.Specializations"]);
+                .FirstOrDefaultAsync(x => x.Id == appointmentId, query => query.Include(x => x.AppointmentType).Include(x => x.Doctor).ThenInclude(x => x.Specializations));
 
             if (appointment == null) return new AppointmentResponse();
 
@@ -64,18 +71,21 @@
         public async Task<bool> CancelAppointmentByPatient(int patientId, int appointmentId, string? cancellationReason, CancellationToken cancellationToken = default)
         {
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == appointmentId && x.PatientId == patientId, ["Payment"])
+                .FirstOrDefaultAsync(x => x.Id == appointmentId && x.PatientId == patientId, query => query.Include(x => x.Payment))
                 .ConfigureAwait(false);
 
             if (appointment == null)
+            {
+                _loggerService.LogWarning("Attempted cancellation for non-existent or unauthorized appointment {AppointmentId} by patient {PatientId}.", appointmentId, patientId);
                 throw new ItemNotFound("Appointment does not exist or you don't have permission.");
+            }
 
-            if (appointment.AppointmentStatus == AppointmentStatus.Completed)
-                throw new BadRequest("Cannot cancel a completed appointment.");
-
-            if (appointment.AppointmentStatus == AppointmentStatus.CanceledByDoctor ||
-                appointment.AppointmentStatus == AppointmentStatus.CanceledByPatient)
-                throw new BadRequest("Appointment is already canceled.");
+            // Step 2: Validate If Appointment Can Be Canceled
+            if (!IsCancellable(appointment))
+            {
+                _loggerService.LogWarning("Attempted to cancel an invalid appointment {AppointmentId} by patient {PatientId}.", appointmentId, patientId);
+                throw new BadRequest("Appointment cannot be canceled.");
+            }
 
             appointment.AppointmentStatus = AppointmentStatus.CanceledByPatient;
             appointment.CancelledAt = DateTimeOffset.UtcNow;
@@ -103,30 +113,41 @@
 
             _loggerService.LogInfo("Appointment {AppointmentId} was canceled by patient {PatientId}.", appointmentId, patientId);
 
-            // ✅ Notify doctor about the cancellation
-            //await _notificationService.SendNotificationAsync(appointment.DoctorId,
-            //    $"The patient has canceled appointment {appointmentId}. If payment was made, a refund has been processed.");
+            await NotifyDoctorAsync(appointment.DoctorId, appointment.Id);
 
             return true;
         }
 
 
-
-        public async Task<List<AppointmentResponse>> GetAppointmentsByDateRange(
-            int patientId, DateTimeOffset startDate, DateTimeOffset endDate,CancellationToken cancellationToken = default)
+        public async Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetAppointmentsByDateRange(
+         int patientId,
+         DateTimeOffset startDate,
+         DateTimeOffset endDate,
+         int pageNumber = 1,  // Added pagination parameters
+         int pageSize = 10,
+         CancellationToken cancellationToken = default)
         {
             // Ensure the time part is considered to avoid extra records.
-            var startOfDay = startDate.Date; // Start at 00:00 of the given date
-            var endOfDay = endDate.Date.AddDays(1).AddTicks(-1); // End at 23:59:59.999 of the given date
+            var startOfDay = startDate.Date;
+            var endOfDay = endDate.Date.AddDays(1).AddTicks(-1);
 
-            var appointments = await _unitOfWork.Repository<Appointment>()
+            (var appointments, var totalCount) = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
-                   x => x.PatientId == patientId &&
-                         x.CreatedAt >= startOfDay && x.CreatedAt <= endOfDay, // ✅ Fixed filtering
-                    includes: ["AppointmentType", "Doctor", "Doctor.Specializations"]);
+                    x => x.PatientId == patientId &&
+                         x.CreatedAt >= startOfDay && x.CreatedAt <= endOfDay,
+                    query => query
+                        .Include(x => x.AppointmentType)
+                        .Include(x => x.Doctor)
+                        .ThenInclude(x => x.Specializations),
+                    pageNumber, // ✅ Pass page number
+                    pageSize // ✅ Pass page size
+                );
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (!appointments.Any())
-                return new List<AppointmentResponse>();
+                return (new List<AppointmentResponse>(), totalPages);
 
             // Extract distinct doctor AppUserIds from the appointments.
             var doctorAppUserIds = appointments
@@ -138,24 +159,31 @@
             var doctorDetails = await FetchDoctorDetails(doctorAppUserIds, cancellationToken);
 
             // Map appointments to response DTOs.
-            return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
+            return (appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList(), totalPages);
         }
 
-        public async Task<List<AppointmentResponse>> GetAppointmentsByDateRangeForDoctor(
-          int doctorId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
+
+        public async Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetAppointmentsByDateRangeForDoctor(
+           int doctorId, DateTimeOffset startDate, DateTimeOffset endDate,
+           int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
             // Convert startDate and endDate to cover the full day
             var startOfDay = startDate.Date; // Converts to `2025-02-25T00:00:00`
             var endOfDay = startDate.Date.AddDays(1).AddTicks(-1); // Converts to `2025-02-25T23:59:59.999`
 
-            var appointments = await _unitOfWork.Repository<Appointment>()
+            (var appointments,var totalCount) = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
                     x => x.Doctor.AppUserId == doctorId &&
                          x.StartDate >= startOfDay && x.StartDate <= endOfDay, // ✅ Fixed filtering
-                    includes: ["AppointmentType", "Doctor", "Doctor.Specializations"]);
+                    query => query.Include(x => x.AppointmentType).Include(x => x.Doctor).ThenInclude(x => x.Specializations),
+                    pageNumber,
+                    pageSize);
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (!appointments.Any())
-                return new List<AppointmentResponse>();
+                return (new List<AppointmentResponse>(), totalPages);
 
             // Extract distinct doctor AppUserIds from the appointments.
             var doctorAppUserIds = appointments
@@ -167,7 +195,7 @@
             var doctorDetails = await FetchDoctorDetails(doctorAppUserIds, cancellationToken);
 
             // Map appointments to response DTOs.
-            return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
+            return (appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList(), totalPages);
         }
 
 
@@ -184,14 +212,20 @@
                     var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
                     // 🔍 Fetch appointment
-                    var appointment = await appointmentRepo.FirstOrDefaultASync(x => x.Id == appointmentId);
+                    var appointment = await appointmentRepo.FirstOrDefaultAsync(x => x.Id == appointmentId);
 
                     if (appointment is null)
+                    {
+                        _loggerService.LogWarning("Attempted to reschedule non-existent appointment {AppointmentId}.", appointmentId);
                         throw new ItemNotFound("Appointment does not exist.");
+                    }
 
                     if (appointment.AppointmentStatus == AppointmentStatus.Completed ||
                         appointment.AppointmentStatus == AppointmentStatus.CanceledByPatient)
+                    {
+                        _loggerService.LogWarning("Attempted to reschedule a canceled or completed appointment {AppointmentId}.", appointmentId);
                         throw new BadRequest("Cannot reschedule a canceled or completed appointment.");
+                    }
 
                     if (newTimeSlot.EndTime < newTimeSlot.StartTime)
                         throw new BadRequest("Invalid time slot. End time must be after start time.");
@@ -206,39 +240,47 @@
 
                     // ✅ **Check for availability**
                     if (!await appointmentRepo.IsTimeSlotAvailable(appointment.DoctorId, startTimeOffset, endTimeOffset))
+                    {
+                        _loggerService.LogWarning("Time slot unavailable for rescheduling appointment {AppointmentId}.", appointmentId);
                         throw new InvalidOperationException("The selected time slot is already booked.");
+                    }
 
                     // ✅ **Update appointment**
-                    appointment.StartDate = startTimeOffset;
-                    appointment.EndDate = endTimeOffset;
-                    appointment.AppointmentStatus = AppointmentStatus.PendingApproval;
+                    await appointmentRepo.ExecuteUpdateAsync(
+                        x => x.Id == appointmentId,
+                        x => new Appointment
+                        {
+                            StartDate = startTimeOffset,
+                            EndDate = endTimeOffset,
+                            AppointmentStatus = AppointmentStatus.PendingApproval
+                        });
 
-                    await appointmentRepo.UpdateEntityAsync(appointment);
-                    if (await _unitOfWork.CommitAsync() <= 0)
-                        throw new Exception("Failed to reschedule appointment.");
+                    await _unitOfWork.CommitAsync(); // ✅ Commit changes **before** notifications
 
-                    // ✅ **Send notification to the doctor**
-                    //var doctorDeviceToken = await _unitOfWork.UserRepository.GetUserDeviceToken(appointment.DoctorId);
-                    //if (!string.IsNullOrEmpty(doctorDeviceToken))
-                    //{
-                    //    await _firebaseNotificationService.SendPushNotification(
-                    //        doctorDeviceToken,
-                    //        "Appointment Rescheduled",
-                    //        $"A patient has rescheduled an appointment to {startTimeOffset:dd/MM/yyyy HH:mm}.");
-                    //}
-
-                    // ✅ **Clear Cache**
-                    await _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming");
+                    _loggerService.LogInfo("Appointment {AppointmentId} successfully rescheduled to {NewDate}.",
+                        appointmentId, startTimeOffset);
 
                     await transaction.CommitAsync();
+
+                    // ✅ **Send notification outside the transaction**
+                    _ = Task.Run(async () =>
+                    {
+                        await NotifyDoctorAsync(appointment.DoctorId, appointmentId, startTimeOffset);
+                    });
+
+                    // ✅ **Clear Cache outside the transaction**
+                    _ = _cacheService.RemoveCachedResponseAsync("/api/appointments/upcoming");
+
                     return true;
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
+                    _loggerService.LogError("Failed to reschedule appointment {AppointmentId}: {ErrorMessage}",
+                        appointmentId, ex.Message);
                     throw new Exception($"Failed to reschedule appointment {appointmentId}: {ex.Message}", ex);
                 }
-            });
+          });
         }
 
 
@@ -254,24 +296,31 @@
                 {
                     // 1️⃣ Retrieve the doctor with their appointment types.
                     var doctor = await _unitOfWork.GetCustomRepository<IDoctorRepositoryAsync>()
-                        .FirstOrDefaultASync(x => x.Id == int.Parse(request.DoctorId), ["AppointmentTypes"])
+                        .FirstOrDefaultAsync(x => x.Id == int.Parse(request.DoctorId), x => x.Include(x => x.AppointmentTypes))
                         .ConfigureAwait(false);
 
                     if (doctor == null)
+                    { _loggerService.LogWarning("Attempted to book an appointment with non-existent doctor {DoctorId}.", request.DoctorId);
                         throw new ItemNotFound("Doctor does not exist.");
-
+                    }
                     // 2️⃣ Retrieve the specified appointment type.
                     var appointmentType = doctor.AppointmentTypes.FirstOrDefault(a => a.Id.ToString() == request.AppointmentTypeId);
+                    
                     if (appointmentType == null)
+                    {
+                        _loggerService.LogWarning("Attempted to book an appointment with an invalid appointment type {AppointmentTypeId}.", request.AppointmentTypeId);
                         throw new ItemNotFound("This appointment type does not exist for this doctor.");
+                    }
 
                     // 3️⃣ Calculate the appointment's end time by adding the duration to the start date.
                     var endTime = request.StartDate.Add(appointmentType.Duration);
 
                     // 4️⃣ Check if the new time slot is available.
                     if (!await IsTimeSlotAvailable(doctor.Id, request.StartDate, endTime).ConfigureAwait(false))
+                    {
+                        _loggerService.LogWarning("Attempted to book an unavailable time slot {StartDate}.", request.StartDate);
                         throw new BadRequest("Cannot book appointment; the selected time slot is already booked. Please try another time.");
-
+                    }
                     // 5️⃣ Create the appointment.
                     var appointment = new Appointment
                     {
@@ -297,6 +346,26 @@
 
                     // TODO: Send Notification to doctor to approve
 
+                    var user = await _userManager.Users.Where(u => u.Id == doctor.AppUserId)
+                                                       .Select(x => new { x.FirstName, x.LastName, x.FcmToken })
+                                                       .FirstOrDefaultAsync();
+
+                    if (!string.IsNullOrEmpty(user?.FcmToken))
+                    {
+                        try
+                        {
+                            await _firebaseService.SendNotificationAsync(
+                                user.FcmToken,
+                                "Appointment Booked",
+                                $"Hi {user.FirstName} {user.LastName}, a patient has booked an appointment on {appointment.StartDate:dd/MM/yyyy HH:mm}."
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggerService.LogError("Failed to send booking notification for appointment {AppointmentId}: {ErrorMessage}",
+                                appointment.Id, ex.Message);
+                        }
+                    }
                     // TODO: Remove appointments cache
 
                     return true;
@@ -308,7 +377,6 @@
                 }
             });
         }
-
 
 
         private async Task<bool> IsTimeSlotAvailable(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
@@ -354,9 +422,29 @@
                     await transaction.CommitAsync();
                     _loggerService.LogInfo($"Appointment {appointmentId} approved successfully.");
 
-                    // TODO: Send Notification
-                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Approved",
-                    //     "Your appointment has been approved. Please complete payment within 24 hours.");
+                    // TODO: Send Notification tell patient that doctor approved his book
+
+                    var user = await _userManager.Users.Where(x => x.Id == appointment.PatientId)
+                                                       .Select(x => new { x.FcmToken, x.FirstName, x.LastName })
+                                                       .FirstOrDefaultAsync();
+
+                    if (!string.IsNullOrEmpty(user?.FcmToken))
+                    {
+                        try
+                        {
+                            await _firebaseService.SendNotificationAsync(
+                                user.FcmToken,
+                                "Appointment Approved",
+                                $"Hi {user.FirstName} {user.LastName}," +
+                                $"Your appointment has been approved. Please complete payment within 24 hours.."
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggerService.LogError("Failed to send booking notification for appointment {appointmentId}: {ErrorMessage}",
+                                appointmentId, ex.Message);
+                        }
+                    }
 
                     return true;
                 }
@@ -399,9 +487,29 @@
                     await transaction.CommitAsync();
                     _loggerService.LogInfo($"Appointment {appointmentId} rejected successfully.");
 
-                    // TODO: Send Notification
-                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Rejected",
-                    //     "Your appointment request was rejected. Reason: " + (rejectionReason ?? "Not specified."));
+                    // TODO: Send Notification tell patient that doctor approved his book
+
+                    var user = await _userManager.Users.Where(x => x.Id == appointment.PatientId)
+                                                       .Select(x => new { x.FcmToken, x.FirstName, x.LastName })
+                                                       .FirstOrDefaultAsync();
+
+                    if (!string.IsNullOrEmpty(user?.FcmToken))
+                    {
+                        try
+                        {
+                            await _firebaseService.SendNotificationAsync(
+                                user.FcmToken,
+                                "Appointment Approved",
+                                $"Hi {user.FirstName} {user.LastName}," +
+                                $"Your appointment request was rejected. Reason: " + (rejectionReason ?? "Not specified.")
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggerService.LogError("Failed to send booking notification for appointment {appointmentId}: {ErrorMessage}",
+                                appointmentId, ex.Message);
+                        }
+                    }
 
                     return true;
                 }
@@ -415,16 +523,22 @@
         }
 
 
-        public async Task<List<AppointmentResponse>> GetPendingAppointmentsForDoctor(int doctorId, CancellationToken cancellationToken = default)
+        public async Task<(List<AppointmentResponse> appointmentResponses, int totalPages)> GetPendingAppointmentsForDoctor(
+            int doctorId, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
             // Retrieve appointments with necessary navigations: AppointmentType, Doctor, and Doctor.Specializations.
-            var appointments = await _unitOfWork.Repository<Appointment>()
+            (var appointments, var totalCount) = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
                     x => x.Doctor.AppUserId == doctorId && x.AppointmentStatus == AppointmentStatus.PendingApproval,
-                    includes: ["AppointmentType", "Doctor", "Doctor.Specializations"]);
+                    query => query.Include(x => x.AppointmentType).Include(x => x.Doctor).ThenInclude(x => x.Specializations),
+                    pageNumber,
+                    pageSize);
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             if (!appointments.Any())
-                return new List<AppointmentResponse>();
+                return (new List<AppointmentResponse>(), totalPages);
 
             // Extract distinct doctor AppUserIds from the appointments.
             var doctorAppUserIds = appointments
@@ -436,7 +550,7 @@
             var doctorDetails = await FetchDoctorDetails(doctorAppUserIds, cancellationToken);
 
             // Map appointments to response DTOs.
-            return appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList();
+            return (appointments.Select(a => MapAppointmentResponse(a, doctorDetails)).ToList(), totalPages);
         }
 
         public async Task<bool> MarkAppointmentAsCompleted(int appointmentId)
@@ -469,9 +583,29 @@
                     await transaction.CommitAsync();
                     _loggerService.LogInfo($"Appointment {appointmentId} marked as completed.");
 
-                    // TODO: Send Notification
-                    // await _notificationService.SendNotificationToPatient(appointment.PatientId, "Appointment Completed",
-                    //     "Your appointment has been successfully completed.");
+                    // TODO: Send Notification tell patient that doctor completed his appointment
+
+                    var user = await _userManager.Users.Where(x => x.Id == appointment.PatientId)
+                                                       .Select(x => new { x.FcmToken, x.FirstName, x.LastName })
+                                                       .FirstOrDefaultAsync();
+
+                    if (!string.IsNullOrEmpty(user?.FcmToken))
+                    {
+                        try
+                        {
+                            await _firebaseService.SendNotificationAsync(
+                                user.FcmToken,
+                                "Appointment Completed",
+                                $"Hi {user.FirstName} {user.LastName}," +
+                                $"Your appointment has been successfully completed."
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggerService.LogError("Failed to send booking notification for appointment {appointmentId}: {ErrorMessage}",
+                                appointmentId, ex.Message);
+                        }
+                    }
 
                     return true;
                 }
@@ -487,7 +621,7 @@
         public async Task<string> CreatePaymentIntent(int appointmentId, CancellationToken cancellationToken = default)
         {
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == appointmentId, includes: ["AppointmentType", "Payment"])
+                .FirstOrDefaultAsync(x => x.Id == appointmentId, query => query.Include(x => x.AppointmentType).Include(x => x.Payment))
                 .ConfigureAwait(false);
 
             if (appointment == null)
@@ -500,7 +634,7 @@
 
             // 🔍 Check if a PaymentIntent already exists for this appointment
             var existingPayment = await _unitOfWork.Repository<Payment>()
-                .FirstOrDefaultASync(x => x.AppointmentId == appointmentId);
+                .FirstOrDefaultAsync(x => x.AppointmentId == appointmentId);
 
             if (existingPayment != null && existingPayment.Status == PaymentStatus.Pending)
             {
@@ -545,7 +679,7 @@
                 await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
                 var payment = await _unitOfWork.Repository<Payment>()
-                    .FirstOrDefaultASync(x => x.AppointmentId == appointmentId);
+                    .FirstOrDefaultAsync(x => x.AppointmentId == appointmentId);
 
                 if (payment == null)
                     throw new ItemNotFound("Payment record not found.");
@@ -563,7 +697,7 @@
                 payment.Status = PaymentStatus.Paid;
 
                 var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                    .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"]);
+                    .FirstOrDefaultAsync(x => x.Id == appointmentId, query => query.Include(x => x.Payment));
 
                 if (appointment != null)
                 {
@@ -581,7 +715,7 @@
 
         public async Task<AppointmentStatus> GetAppointmentStatus(int appointmentId)
         {
-            var appointment = await _unitOfWork.Repository<Appointment>().FirstOrDefaultASync(x=> x.Id == appointmentId);
+            var appointment = await _unitOfWork.Repository<Appointment>().FirstOrDefaultAsync(x=> x.Id == appointmentId);
 
             if (appointment == null)
                 throw new ItemNotFound("appointment does not exist");
@@ -592,7 +726,7 @@
         public async Task<bool> CancelAppointmentByDoctor(int appointmentId, string? cancellationReason, CancellationToken cancellationToken = default)
         {
             var appointment = await _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>()
-                .FirstOrDefaultASync(x => x.Id == appointmentId, ["Payment"])
+                .FirstOrDefaultAsync(x => x.Id == appointmentId, query => query.Include(x => x.Payment))
                 .ConfigureAwait(false);
 
             if (appointment == null)
@@ -645,6 +779,28 @@
             //await _notificationService.SendNotificationAsync(appointment.PatientId,
             //    $"Your appointment {appointmentId} has been canceled. If applicable, your refund is being processed.");
 
+            var user = await _userManager.Users.Where(x => x.Id == appointment.PatientId)
+                                                      .Select(x => new { x.FcmToken, x.FirstName, x.LastName })
+                                                      .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrEmpty(user?.FcmToken))
+            {
+                try
+                {
+                    await _firebaseService.SendNotificationAsync(
+                        user.FcmToken,
+                        "Appointment Canceled",
+                        $"Hi {user.FirstName} {user.LastName}," +
+                        $"Your appointment {appointmentId} has been canceled. If applicable, your refund is being processed."
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _loggerService.LogError("Failed to send booking notification for appointment {appointmentId}: {ErrorMessage}",
+                        appointmentId, ex.Message);
+                }
+            }
+
             _loggerService.LogInfo("Appointment {AppointmentId} successfully canceled by doctor.", appointmentId);
             return true;
         }
@@ -660,50 +816,57 @@
                 var appointmentRepo = _unitOfWork.GetCustomRepository<IAppointmentRepositoryAsync>();
 
                 // Define the criteria for unpaid and expired appointments
-                Expression<Func<Appointment, bool>> expression = x =>
-                    x.PaymentStatus == PaymentStatus.Pending &&
-                    x.AppointmentStatus == AppointmentStatus.PendingPayment &&
-                    x.PaymentDueTime < DateTime.UtcNow;
+                var expiredAppointments = await appointmentRepo.GetAllAsync(
+                    x => x.PaymentStatus == PaymentStatus.Pending &&
+                         x.AppointmentStatus == AppointmentStatus.PendingPayment &&
+                         x.PaymentDueTime < DateTimeOffset.UtcNow
+                );
 
-                // Fetch all expired unpaid appointments
-                var expiredAppointments = await appointmentRepo.GetAllAsync(expression);
-
-                if (expiredAppointments is null || !expiredAppointments.Any())
+                if (!expiredAppointments.Any())
                 {
                     _loggerService.LogInfo("No expired unpaid appointments found.");
                     return;
                 }
 
-             //   Prepare notifications
-                var notificationTasks = new List<Task>();
-
-                foreach (var appointment in expiredAppointments)
-                {
-                    appointment.AppointmentStatus = AppointmentStatus.AutoCanceled;
-                    appointment.CancelledAt = DateTimeOffset.UtcNow;
-                    appointment.CancellationReason = "Payment not completed within the required timeframe.";
-
-                    _loggerService.LogWarning($"Auto-canceled appointment (ID: {appointment.Id}) due to unpaid status.");
-
-                    // 🔹 Notify the patient about auto-cancelation
-                    //if (!string.IsNullOrEmpty(appointment.PatientDeviceToken)) // Ensure the device token exists
-                    //{
-                    //    notificationTasks.Add(_firebaseNotificationService.SendPushNotification(
-                    //        appointment.PatientDeviceToken,
-                    //        "Appointment Auto-Canceled",
-                    //        $"Your appointment on {appointment.StartDate:MMM dd, yyyy} at {appointment.StartDate:hh:mm tt} was auto-canceled due to non-payment."
-                    //    ));
-                    //}
-                }
-
-                // 🔹 Perform batch update for better efficiency
-                await appointmentRepo.UpdateRangeAsync(expiredAppointments);
-                await _unitOfWork.CommitAsync();
-
-                // 🔹 Send notifications asynchronously
-                await Task.WhenAll(notificationTasks);
+                // ✅ Use Batch Update for better efficiency
+                await appointmentRepo.ExecuteUpdateAsync(
+                    x => expiredAppointments.Select(a => a.Id).Contains(x.Id),
+                    x => new Appointment
+                    {
+                        AppointmentStatus = AppointmentStatus.AutoCanceled,
+                        CancelledAt = DateTimeOffset.UtcNow,
+                        CancellationReason = "Payment not completed within the required timeframe."
+                    });
 
                 _loggerService.LogInfo($"Successfully auto-canceled {expiredAppointments.Count} unpaid appointments.");
+
+                // 🔹 Fetch patients in a single query
+                var patientIds = expiredAppointments.Select(x => x.PatientId).Distinct().ToList();
+                var users = await _userManager.Users
+                    .Where(u => patientIds.Contains(u.Id))
+                    .Select(u => new { u.Id, u.FcmToken, u.FirstName, u.LastName })
+                    .ToDictionaryAsync(u => u.Id);
+
+                // 🔹 Send notifications in parallel
+                await Parallel.ForEachAsync(expiredAppointments, async (appointment, _) =>
+                {
+                    if (users.TryGetValue(appointment.PatientId, out var user) && !string.IsNullOrEmpty(user.FcmToken))
+                    {
+                        try
+                        {
+                            await _firebaseService.SendNotificationAsync(
+                                user.FcmToken,
+                                "Appointment Auto-Canceled",
+                                $"Hi {user.FirstName} {user.LastName}, Your appointment on {appointment.StartDate:MMM dd, yyyy} at {appointment.StartDate:hh:mm tt} was auto-canceled due to non-payment."
+                            );
+                        }
+                        catch (Exception notificationEx)
+                        {
+                            _loggerService.LogError($"Failed to send notification for appointment {appointment.Id}: {notificationEx.Message}");
+                        }
+                    }
+                });
+
             }
             catch (Exception ex)
             {
@@ -712,23 +875,94 @@
             }
         }
 
-
-        private async Task<IEnumerable<Appointment>> FetchPatientAppointments(int userId, AppointmentStatus? status)
+        private async Task NotifyDoctorAsync(int doctorId, int appointmentId, DateTimeOffset newDate)
         {
-            return await _unitOfWork.Repository<Appointment>()
-                .GetAllAsync(
-                    x => x.PatientId == userId && (status == null || x.AppointmentStatus == status),
-                    ["AppointmentType", "Doctor", "Doctor.Specializations"])
-                .ConfigureAwait(false);
+            var doctor = await _unitOfWork.Repository<Doctor>().FirstOrDefaultAsync(d => d.Id == doctorId);
+
+            if (doctor == null) return;
+
+            var user = await _userManager.Users
+                .Where(u => u.Id == doctor.AppUserId)
+                .Select(u => new { u.FirstName, u.LastName, u.FcmToken })
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrEmpty(user?.FcmToken))
+            {
+                try
+                {
+                    await _firebaseService.SendNotificationAsync(
+                        user.FcmToken,
+                        "Appointment Rescheduled",
+                        $"Hi {user.FirstName} {user.LastName}, " +
+                        $"A patient has rescheduled an appointment to {newDate:dd/MM/yyyy HH:mm}.");
+                }
+                catch (Exception ex)
+                {
+                    _loggerService.LogError("Failed to send reschedule notification for appointment {AppointmentId}: {ErrorMessage}",
+                        appointmentId, ex.Message);
+                }
+            }
         }
 
-        private async Task<IEnumerable<Appointment>> FetchDoctorAppointments(int doctorId, AppointmentStatus? status)
+        private bool IsCancellable(Appointment appointment)
         {
-            return await _unitOfWork.Repository<Appointment>()
+            return appointment.AppointmentStatus switch
+            {
+                AppointmentStatus.Completed => false,
+                AppointmentStatus.CanceledByDoctor or AppointmentStatus.CanceledByPatient => false,
+                _ => true
+            };
+        }
+
+        private async Task NotifyDoctorAsync(int doctorId, int appointmentId)
+        {
+            var doctorInfo = await _unitOfWork.Repository<Doctor>().GetByIdAsync(doctorId);
+
+            if (doctorInfo == null) return;
+
+            var user = await _userManager.Users
+                .Where(u => u.Id == doctorInfo.AppUserId)
+                .Select(u => new { u.FcmToken, u.FirstName, u.LastName })
+                .FirstOrDefaultAsync();
+
+            if (user?.FcmToken != null)
+            {
+                await _firebaseService.SendNotificationAsync(user.FcmToken, "Cancellation",
+                    $"The patient {user.FirstName} {user.LastName} has canceled appointment {appointmentId}. If payment was made, a refund has been processed.");
+            }
+        }
+
+
+        private async Task<(IEnumerable<Appointment> appointments,int totalPages)> FetchPatientAppointments(int userId, AppointmentStatus? status, int pageNumber = 1, int pageSize = 10)
+        {
+            (var items, var totalCount) = await _unitOfWork.Repository<Appointment>()
+                .GetAllAsync(
+                    x => x.PatientId == userId && (status == null || x.AppointmentStatus == status),
+                    query => query.Include(x => x.AppointmentType).Include(x => x.Doctor).ThenInclude(x => x.Specializations),
+                    pageNumber,
+                    pageSize)
+                .ConfigureAwait(false);
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+            return (items, totalPages);
+        }
+
+        private async Task<(IEnumerable<Appointment> appointments, int totalPages)> FetchDoctorAppointments(int doctorId, AppointmentStatus? status, int pageNumber = 1, int pageSize = 10)
+        {
+            (var items, var totalCount) = await _unitOfWork.Repository<Appointment>()
                 .GetAllAsync(
                     x => x.Doctor.AppUserId == doctorId && (status == null || x.AppointmentStatus == status),
-                    ["AppointmentType", "Doctor", "Doctor.Specializations"])
+                    query => query.Include(x => x.AppointmentType).Include(x => x.Doctor).ThenInclude(x => x.Specializations),
+                    pageNumber,
+                    pageSize)
                 .ConfigureAwait(false);
+
+            // Calculate total pages
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+            return (items, totalPages);
         }
 
         private async Task<Dictionary<int, DoctorDetails>> FetchDoctorDetails(List<int> doctorAppUserIds,CancellationToken cancellationToken)

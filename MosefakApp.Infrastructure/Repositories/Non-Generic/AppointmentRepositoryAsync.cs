@@ -8,10 +8,13 @@
             _context = context;
         }
 
-        public async Task<IEnumerable<AppointmentResponse>> GetAppointments(Expression<Func<Appointment, bool>> expression)
+        public async Task<IEnumerable<AppointmentResponse>> GetAppointments(Expression<Func<Appointment, bool>> expression, int pageNumber = 1, int pageSize = 10)
         {
+            // Ensure pageNumber is at least 1 to avoid negative skips
+            pageNumber = pageNumber < 1 ? 1 : pageNumber;
+
             var appointments = await _context.Appointments
-                                                   .Include(x=> x.AppointmentType)
+                                                   .Include(x => x.AppointmentType)
                                                    .Include(x => x.Doctor)
                                                    .ThenInclude(x => x.Specializations)
                                                    .Where(expression)
@@ -37,6 +40,8 @@
                                                                     })
                                                        .ToList()
                                                                 })
+                                                   .Skip((pageNumber - 1) * pageSize)
+                                                   .Take(pageSize)
                                                    .ToListAsync();
 
             return appointments;

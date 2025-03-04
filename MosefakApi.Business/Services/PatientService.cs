@@ -1,6 +1,4 @@
-﻿using MosefakApp.Core.Dtos.Review.Requests;
-
-namespace MosefakApi.Business.Services
+﻿namespace MosefakApi.Business.Services
 {
     public class PatientService : IPatientService
     {

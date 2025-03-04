@@ -14,21 +14,21 @@
 
             RuleFor(x => x.Clinics)
                 .NotNull()
-                .WithMessage("Clinics cannot be null.");
-                //.Must(clinics => clinics.Count > 0)
-                //.WithMessage("At least one Clinic is required.");
+                .WithMessage("Clinics cannot be null.")
+                .Must(clinics => clinics.Count > 0)
+                .WithMessage("At least one Clinic is required.");
 
             RuleFor(x => x.Specializations)
                 .NotNull()
-                .WithMessage("Specializations cannot be null.");
-                //.Must(specializations => specializations.Count > 0)
-                //.WithMessage("At least one Specialization is required.");
+                .WithMessage("Specializations cannot be null.")
+                .Must(specializations => specializations.Count > 0)
+                .WithMessage("At least one Specialization is required.");
 
             RuleFor(x => x.AppointmentTypes)
                 .NotNull()
-                .WithMessage("AppointmentTypes cannot be null.");
-                //.Must(appointmentTypes => appointmentTypes.Count > 0)
-                //.WithMessage("At least one AppointmentType is required.");
+                .WithMessage("AppointmentTypes cannot be null.")
+                .Must(appointmentTypes => appointmentTypes.Count > 0)
+                .WithMessage("At least one AppointmentType is required.");
         }
     }
 }

@@ -23,8 +23,8 @@
                     new Claim(ClaimTypes.GivenName, applicationUser.FirstName),
                     new Claim(ClaimTypes.Name, applicationUser.UserName!),
                     new Claim(ClaimTypes.Email, applicationUser.Email!),
-                    new Claim(nameof(roles), JsonSerializer.Serialize(roles),JsonClaimValueTypes.JsonArray),
-                    new Claim(nameof(permissions), JsonSerializer.Serialize(permissions), JsonClaimValueTypes.JsonArray),
+                    new Claim(nameof(roles), System.Text.Json.JsonSerializer.Serialize(roles),JsonClaimValueTypes.JsonArray),
+                    new Claim(nameof(permissions), System.Text.Json.JsonSerializer.Serialize(permissions), JsonClaimValueTypes.JsonArray),
                 })
             };
             #region Another way to send Roles and Permissions that belong user

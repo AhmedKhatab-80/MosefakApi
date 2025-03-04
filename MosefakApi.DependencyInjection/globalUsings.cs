@@ -37,3 +37,5 @@ global using MosefakApi.Business.Services.Logging;
 global using MosefakApp.Core.IServices.Logging;
 global using MosefakApi.Business.Services.Stripe;
 global using MosefakApp.Core.IServices.Stripe;
+global using MosefakApi.Business.Services.FireBase;
+global using MosefakApp.Core.IServices.FireBase;

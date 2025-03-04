@@ -16,9 +16,6 @@
             ? TotalEarnings / TotalAppointments
             : 0; // Avoid division by zero
 
-        public List<TopPayingPatientDto> TopPayingPatients { get; set; } = new();
-        public List<EarningsByDateDto> EarningsBreakdownByDate { get; set; } = new();
-
     }
 }
 

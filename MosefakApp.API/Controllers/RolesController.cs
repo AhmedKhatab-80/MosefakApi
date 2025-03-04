@@ -17,14 +17,36 @@
 
         [HttpGet]
         [HasPermission(Permissions.Roles.View)]
-        public async Task<ActionResult<IList<RoleResponse>>> Get([FromQuery] bool IncludeDeleted = false)
+        public async Task<ActionResult<PaginatedResponse<RoleResponse>>> Get(
+        [FromQuery] bool IncludeDeleted = false,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
-            var roles = await _roleService.GetRolesAsync(IncludeDeleted);
+            var (roles, totalPages) = await _roleService.GetRolesWithPermissionsAsync(IncludeDeleted, pageNumber, pageSize);
 
+            if (!roles.Any()) // No need for `roles is null`
+            {
+                return Ok(new PaginatedResponse<RoleResponse>
+                {
+                    Data = new List<RoleResponse>(),
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = totalPages
+                });
+            }
+
+            // Protect sensitive IDs
             roles.ToList().ForEach(r => r.Id = ProtectId(r.Id));
 
-            return Ok(roles);
+            return Ok(new PaginatedResponse<RoleResponse>
+            {
+                Data = roles,
+                TotalPages = totalPages,
+                PageSize = pageSize,
+                CurrentPage = pageNumber
+            });
         }
+
 
         [HttpGet("{id}")]
         [HasPermission(Permissions.Roles.ViewById)]
@@ -35,7 +57,7 @@
             if (unprotectedId == null)
                 return BadRequest("Invalid ID");
 
-            var response = await _roleService.GetRoleByIdAsync(unprotectedId.Value);
+            var response = await _roleService.GetRoleByIdWithPermissionsAsync(unprotectedId.Value);
             response.Id = ProtectId(response.Id);
 
             return Ok(response);

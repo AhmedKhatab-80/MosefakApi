@@ -2,13 +2,13 @@
 {
     public class DoctorRepositoryAsync : GenericRepositoryAsync<Doctor>, IDoctorRepositoryAsync
     {
-        private readonly AppDbContext _appDbContext;
+        private readonly AppDbContext _context;
         private readonly AppIdentityDbContext _identityDbContext;
         private readonly IConfiguration _config;
         private readonly string _baseUrl;
         public DoctorRepositoryAsync(AppDbContext context, AppIdentityDbContext identityDbContext, IConfiguration config) : base(context)
         {
-            _appDbContext = context;
+            _context = context;
             _identityDbContext = identityDbContext;
             _config = config;
             _baseUrl = _config["BaseUrl"] ?? "https://default-url.com/";
@@ -16,7 +16,7 @@
 
         public async Task<List<DoctorResponse>?> GetTopTenDoctors()
         {
-            var query = await _appDbContext.Doctors
+            var query = await _context.Doctors
                 .Include(d => d.Specializations) // Include related specializations
                 .Include(d => d.Reviews) // Include related specializations
                 .Include(d => d.Experiences) // Include related specializations
@@ -100,10 +100,11 @@
         // I did it for better performance to select specific columns that I need it only...
 
 
-
         public async Task<Doctor> GetDoctorById(int doctorId)
         {
-            var query = await _appDbContext.Doctors.Include(i => i.Clinics)
+            var query = await _context.Doctors.AsNoTracking()
+                                                   .AsSplitQuery()
+                                                   .Include(i => i.Clinics)
                                                    .ThenInclude(i => i.WorkingTimes)
                                                    .ThenInclude(i => i.Periods)
                                                    .Include(x => x.Reviews)
@@ -117,10 +118,11 @@
             return query!;
         }
 
+       
         public async Task<DoctorProfileResponse> GetDoctorProfile(int appUserIdFromClaims)
         {
             var doctorQuery = await (
-                from doctor in _appDbContext.Doctors
+                from doctor in _context.Doctors
                 where doctor.AppUserId == appUserIdFromClaims
                 select new
                 {   
@@ -222,5 +224,64 @@
         
         }
 
+        public async Task<DoctorEarningsResponse> GetEarningsReportAsync(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate)
+        {
+            var id = await _context.Doctors.Where(x => x.AppUserId == doctorId).Select(x => x.Id).FirstOrDefaultAsync();
+
+            // Filter Payments by Doctor & Date Range
+            var paymentsQuery = _context.Payments.Include(x=> x.Appointment)
+                .Where(x => x.Appointment.DoctorId == id && x.CreatedAt >= startDate && x.CreatedAt <= endDate);
+
+            var totalEarnings = await paymentsQuery.SumAsync(x => x.Amount);
+            var totalPaidEarnings = await paymentsQuery.Where(x => x.Status == PaymentStatus.Paid).SumAsync(x => x.Amount);
+            var totalPendingEarnings = await paymentsQuery.Where(x => x.Status == PaymentStatus.Pending).SumAsync(x => x.Amount);
+            var totalRefundedEarnings = await paymentsQuery.Where(x => x.Status == PaymentStatus.Refunded).SumAsync(x => x.Amount);
+
+            // Filter Appointments by Doctor & Date Range
+            var appointmentsQuery = _context.Appointments
+                .Where(x => x.Doctor.AppUserId == doctorId && x.CreatedAt >= startDate && x.CreatedAt <= endDate);
+
+            var appointmentStats = await appointmentsQuery
+                .GroupBy(x => x.AppointmentStatus)
+                .Select(group => new
+                {
+                    Status = group.Key,
+                    Count = group.Count()
+                }).ToListAsync();
+
+            // Extract counts from grouped query results
+            var completedAppointmentsCount = appointmentStats.FirstOrDefault(x => x.Status == AppointmentStatus.Completed)?.Count ?? 0;
+            var pendingAppointmentsCount = appointmentStats.FirstOrDefault(x => x.Status == AppointmentStatus.PendingPayment)?.Count ?? 0;
+            var cancelledAppointmentsCount = appointmentStats
+                .Where(x => x.Status == AppointmentStatus.CanceledByPatient || x.Status == AppointmentStatus.CanceledByDoctor)
+                .Sum(x => x.Count);
+            var totalAppointments = appointmentStats.Sum(x => x.Count);
+
+            return new DoctorEarningsResponse
+            {
+                TotalEarnings = totalEarnings,
+                TotalPaidEarnings = totalPaidEarnings,
+                TotalPendingEarnings = totalPendingEarnings,
+                TotalRefundedEarnings = totalRefundedEarnings,
+                TotalAppointments = totalAppointments,
+                CompletedAppointmentsCount = completedAppointmentsCount,
+                PendingAppointmentsCount = pendingAppointmentsCount,
+                CancelledAppointmentsCount = cancelledAppointmentsCount
+            };
+        }
+
     }
 }
+
+/*
+ 
+ app ==> 1/1/2022
+ app ==> 11/1/2022
+ app ==> 19/1/2022
+ app ==> 23/1/2022
+ 
+1/1/2022
+
+23/1/2022
+ 
+ */

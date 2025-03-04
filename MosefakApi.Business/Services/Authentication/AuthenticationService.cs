@@ -32,29 +32,32 @@
                 throw new BadRequest("Invalid UserName or Password");
 
             if (user.IsDisabled)
-                throw new BadRequest($"Disabled User, please contact to your admin");
+                throw new BadRequest("Disabled User, please contact your admin");
 
             var result = await _signInManager.PasswordSignInAsync(user, request.Password, false, true);
 
             if (!result.Succeeded)
             {
-                return result.IsNotAllowed ?
-                              throw new BadRequest("you must confirm email.") :
-                              result.IsLockedOut ?
-                              throw new BadRequest("You are Locked Out") :
-                              throw new BadRequest("Invalid Email Or Password");
+                throw result.IsNotAllowed ? new BadRequest("You must confirm your email.")
+                     : result.IsLockedOut ? new BadRequest("You are Locked Out")
+                     : new BadRequest("Invalid Email Or Password");
+            }
+
+            // ✅ Update FCM Token if provided
+            if (!string.IsNullOrEmpty(request.FcmToken) && user.FcmToken != request.FcmToken)
+            {
+                user.FcmToken = request.FcmToken;
+                await _userManager.UpdateAsync(user);  // Save the new token
             }
 
             var (roles, permissions) = await GetRolesAndPermissions(user);
-
             var jwtProviderResponse = _jwtProvider.GenerateToken(user, roles, permissions);
-
-            await _userManager.UpdateAsync(user);
 
             var response = GetLoginResponse(user, jwtProviderResponse);
 
-            return response is null ? throw new BadRequest("Invalid UserName or Password") : response;
+            return response ?? throw new BadRequest("Invalid UserName or Password");
         }
+
 
 
         public async Task Register(RegisterRequest registerRequest)
@@ -80,6 +83,16 @@
 
             if (result.Succeeded)
             {
+                if (registerRequest.IsDoctor)
+                {
+                    await _userManager.AddToRoleAsync(appUser, DefaultRole.PendingDoctor);
+                    // ❌ Do NOT create Doctor record yet - will be created later in profile completion
+                }
+                else
+                {
+                    await _userManager.AddToRoleAsync(appUser, DefaultRole.Patient);
+                }
+
                 var code = await _userManager.GenerateEmailConfirmationTokenAsync(appUser);
                 code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
@@ -124,9 +137,9 @@
                 throw new BadRequest(string.Join(',', errors));
             }
 
-            // Assign Registered Users to Default Role
+            //// Assign Registered Users to Default Role
 
-            await _userManager.AddToRoleAsync(user, DefaultRole.Patient);
+            //await _userManager.AddToRoleAsync(user, DefaultRole.Patient);
         }
 
         public async Task ResendConfirmationEmail(ResendConfirmationEmailRequest request)

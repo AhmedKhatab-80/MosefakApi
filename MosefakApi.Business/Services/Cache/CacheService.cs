@@ -16,7 +16,7 @@
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             };
 
-            var serilizedResponse = JsonSerializer.Serialize(response, jsonOptions);
+            var serilizedResponse = System.Text.Json.JsonSerializer.Serialize(response, jsonOptions);
 
             _memoryCache.Set(key, serilizedResponse, duration);
 

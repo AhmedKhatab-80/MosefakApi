@@ -1,5 +1,4 @@
-﻿
-namespace MosefakApp.Infrastructure.Repositories.Non_Generic
+﻿namespace MosefakApp.Infrastructure.Repositories.Non_Generic
 {
     public class UserRepository : IUserRepository
     {
@@ -10,7 +9,13 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
             _context = context;
         }
 
-        public async Task<IEnumerable<AppUser>> GetAllUsersAsync() => await _context.Users.ToListAsync();
+        public async Task<IEnumerable<AppUser>> GetAllUsersAsync(int pageIndex = 1, int pageSize = 10)
+        {
+            // Ensure pageIndex is at least 1 to avoid negative skips
+            pageIndex = pageIndex < 1 ? 1 : pageIndex;
+
+            return await _context.Users.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync();
+        }
         public async Task<AppUser?> GetUserByIdAsync(int id) => await _context.Users.FindAsync(id);
 
 
@@ -27,9 +32,12 @@ namespace MosefakApp.Infrastructure.Repositories.Non_Generic
            return await _context.SaveChangesAsync();
         }
 
-        public async Task<IEnumerable<AppUser>> GetAllUsersAsync(Expression<Func<AppUser, bool>> expression)
+        public async Task<IEnumerable<AppUser>> GetAllUsersAsync(Expression<Func<AppUser, bool>> expression, int pageIndex = 1, int pageSize = 10)
         {
-            return await _context.Users.Where(expression).ToListAsync();
+            // Ensure pageIndex is at least 1 to avoid negative skips
+            pageIndex = pageIndex < 1 ? 1 : pageIndex;
+
+            return await _context.Users.Where(expression).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync();
         }
     }
 }

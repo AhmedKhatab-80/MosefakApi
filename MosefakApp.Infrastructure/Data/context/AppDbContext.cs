@@ -1,7 +1,4 @@
-﻿
-using Microsoft.EntityFrameworkCore.Query;
-
-namespace MosefakApp.Infrastructure.Data.context
+﻿namespace MosefakApp.Infrastructure.Data.context
 {
     public class AppDbContext : DbContext
     {
@@ -17,6 +14,7 @@ namespace MosefakApp.Infrastructure.Data.context
         public DbSet<Review> Reviews { get; set; }
         public DbSet<Specialization> Specializations { get; set; }
         public DbSet<WorkingTime> WorkingTimes { get; set; }
+        public DbSet<ContactUs> ContactUs { get; set; }
 
         private readonly IHttpContextAccessor _httpContextAccessor;
 

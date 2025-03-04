@@ -7,5 +7,6 @@
         Task<Dictionary<int, (string FullName, string ImagePath)>> GetUserDetailsAsync(IEnumerable<int> appUserIds);
         Task<Dictionary<int, (string FullName, string ImagePath)>> GetUserDetailsAsync(int appUserIds);
         Task<DoctorProfileResponse> GetDoctorProfile(int appUserIdFromClaims);
+        Task<DoctorEarningsResponse> GetEarningsReportAsync(int doctorId, DateTimeOffset startDate, DateTimeOffset endDate);
     }
 }

@@ -23,5 +23,6 @@
         [RegularExpression(RegexPatterns.PasswordPattern, ErrorMessage = Errors.PasswordRegExp)]
         public string Password { get; set; } = null!;
 
+        public bool IsDoctor { get; set; } = false;
     }
 }

@@ -1,4 +1,5 @@
-﻿global using MosefakApp.Domains.Entities;
+﻿global using Microsoft.EntityFrameworkCore;
+global using MosefakApp.Domains.Entities;
 global using Stripe;
 global using Hangfire;
 global using MosefakApi.Business.Services;
@@ -7,6 +8,7 @@ global using MosefakApi.DependencyInjection;
 global using MosefakApp.API.Extensions;
 global using MosefakApp.API.Filters.Authentication;
 global using MosefakApp.Core.Dtos.AppointmentType.Requests;
+global using MosefakApp.Core.Dtos.ContactUs;
 global using System.Text.Json.Serialization;
 global using MosefakApp.Core.Dtos.Review.Requests;
 global using Microsoft.AspNetCore.Mvc;
@@ -63,6 +65,7 @@ global using MosefakApp.Core.Dtos.Award.Requests;
 global using MosefakApp.Core.Dtos.Clinic.Requests;
 global using MosefakApp.Core.Dtos.Clinic.Responses;
 global using MosefakApp.Core.Dtos.Education.Requests;
+global using MosefakApp.Core.Dtos.Pagination;
 global using MosefakApp.Core.Dtos.Review.Responses;
 global using MosefakApp.Core.Dtos.Experience.Requests;
 global using MosefakApp.Core.IRepositories.Non_Generic;
@@ -75,5 +78,6 @@ global using MosefakApp.Core.Dtos.Award.Responses;
 global using MosefakApp.Core.Dtos.Education.Responses;
 global using MosefakApp.Core.Dtos.Experience.Responses;
 global using MosefakApp.Core.Dtos.Specialization.Responses;
-
+global using MosefakApp.Core.Dtos.Notification;
+global using MosefakApp.Core.IServices.FireBase;
 

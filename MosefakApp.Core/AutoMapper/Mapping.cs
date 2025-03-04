@@ -14,6 +14,8 @@
 
             // Doctor
 
+            CreateMap<Doctor,CompleteDoctorProfileRequest>().ReverseMap();
+
             CreateMap<DoctorRequest, Doctor>()
                 .ForMember(dest => dest.NumberOfReviews, opt => opt.MapFrom(src => 0)); // Default value for NumberOfReviews
 

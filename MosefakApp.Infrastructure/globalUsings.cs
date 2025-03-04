@@ -14,6 +14,7 @@ global using MosefakApp.Core.Dtos.Doctor.Responses;
 global using MosefakApp.Core.Dtos.Education.Responses;
 global using MosefakApp.Core.Dtos.Experience.Responses;
 global using MosefakApp.Core.Dtos.Specialization.Responses;
+global using Microsoft.EntityFrameworkCore.Query;
 global using MosefakApp.Core.Dtos.User.Responses;
 global using MosefakApp.Core.IRepositories.Generic;
 global using MosefakApp.Core.IRepositories.Non_Generic;

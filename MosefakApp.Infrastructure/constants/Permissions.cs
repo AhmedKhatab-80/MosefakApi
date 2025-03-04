@@ -131,6 +131,10 @@
             public const string Delete = "Permissions.Reviews.Delete"; 
         }
 
+        public static class Contacts
+        {
+            public const string View = "Permissions.Contacts.View";
+        }
         /// <summary>
         /// Retrieves a list of all permission constants.
         /// </summary>

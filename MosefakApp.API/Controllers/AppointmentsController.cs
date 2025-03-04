@@ -16,22 +16,55 @@
 
         [HttpGet("patient")]
         [HasPermission(Permissions.Appointments.ViewPatientAppointments)]
-        public async Task<ActionResult<IEnumerable<AppointmentResponse>?>> GetPatientAppointments([FromQuery]AppointmentStatus? status = null, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<PaginatedResponse<AppointmentResponse>>> GetPatientAppointments(
+        [FromQuery] AppointmentStatus? status = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
         {
             int userId = User.GetUserId();
-            var query = await _appointmentsService.GetPatientAppointments(userId, status, cancellationToken);
 
-            query.ForEach(x => x.Id = ProtectId(x.Id));
-            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
-            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
-            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
+            // Get paginated appointments
+            var (appointments, totalPages) = await _appointmentsService.GetPatientAppointments(
+                userId, status, pageNumber, pageSize, cancellationToken);
 
-            return Ok(query);  
+            if (!appointments.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentResponse>
+                {
+                    Data = new List<AppointmentResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+
+            // Protect sensitive IDs
+            appointments.ForEach(x =>
+            {
+                x.Id = ProtectId(x.Id);
+                x.DoctorId = ProtectId(x.DoctorId);
+                x.DoctorSpecialization?.ForEach(s => s.Id = ProtectId(s.Id)); // Null check
+                if (x.AppointmentType != null)
+                    x.AppointmentType.Id = ProtectId(x.AppointmentType.Id);
+            });
+
+            // Return a paginated response
+            return Ok(new PaginatedResponse<AppointmentResponse>
+            {
+                Data = appointments,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
+
 
         [HttpGet("{appointmentId}")]
         [HasPermission(Permissions.Appointments.View)]
-        public async Task<ActionResult<AppointmentResponse>> GetAppointmentById(string appointmentId, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<AppointmentResponse>> GetAppointmentById(
+        string appointmentId,
+        CancellationToken cancellationToken = default)
         {
             var unprotectedId = UnprotectId(appointmentId);
 
@@ -40,29 +73,68 @@
 
             var query = await _appointmentsService.GetAppointmentById(unprotectedId.Value, cancellationToken);
 
+            if (query == null)
+                return NotFound("Appointment not found");
+
+            // Protect sensitive IDs
             query.Id = appointmentId;
             query.DoctorId = ProtectId(query.DoctorId);
-            query.AppointmentType.Id = ProtectId(query.AppointmentType.Id);
-            query.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id));
+
+            if (query.AppointmentType != null)
+                query.AppointmentType.Id = ProtectId(query.AppointmentType.Id);
+
+            if (query.DoctorSpecialization != null)
+                query.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id));
 
             return Ok(query);
         }
 
+
         // Get Appointments by Date Range (Patient)
         [HttpGet("range")]
         [HasPermission(Permissions.Appointments.ViewInRange)]
-        public async Task<ActionResult<List<AppointmentResponse>>> GetAppointmentsByDateRange([FromQuery] DateTimeOffset startDate, [FromQuery] DateTimeOffset endDate, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<PaginatedResponse<AppointmentResponse>>> GetAppointmentsByDateRange(
+        [FromQuery] DateTimeOffset startDate,
+        [FromQuery] DateTimeOffset endDate,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
         {
             int userId = User.GetUserId();
 
-            var query = await _appointmentsService.GetAppointmentsByDateRange(userId,startDate,endDate, cancellationToken);
+            // Get paginated appointments
+            var (appointments, totalPages) = await _appointmentsService.GetAppointmentsByDateRange(
+                userId, startDate, endDate, pageNumber, pageSize, cancellationToken);
 
-            query.ForEach(x => x.Id = ProtectId(x.Id));
-            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
-            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
-            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
+            if (!appointments.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentResponse>
+                {
+                    Data = new List<AppointmentResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
 
-            return Ok(query);
+            // Protect sensitive IDs
+            appointments.ForEach(x =>
+            {
+                x.Id = ProtectId(x.Id);
+                x.DoctorId = ProtectId(x.DoctorId);
+                x.DoctorSpecialization?.ForEach(s => s.Id = ProtectId(s.Id)); // Null check
+                if (x.AppointmentType != null)
+                    x.AppointmentType.Id = ProtectId(x.AppointmentType.Id);
+            });
+
+            // Return paginated response
+            return Ok(new PaginatedResponse<AppointmentResponse>
+            {
+                Data = appointments,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
 
 
@@ -210,48 +282,138 @@
 
         [HttpGet("doctor")]
         [HasPermission(Permissions.Appointments.ViewDoctorAppointments)]
-        public async Task<ActionResult<List<AppointmentResponse>>> GetDoctorAppointments(AppointmentStatus? status = null, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<PaginatedResponse<AppointmentResponse>>> GetDoctorAppointments(
+        [FromQuery] AppointmentStatus? status = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();
-            var query = await _appointmentsService.GetDoctorAppointments(doctorId, status, cancellationToken);
 
-            query.ForEach(x => x.Id = ProtectId(x.Id));
-            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
-            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
-            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
+            // Fetch paginated doctor appointments
+            var (appointments, totalPages) = await _appointmentsService.GetDoctorAppointments(
+                doctorId, status, pageNumber, pageSize, cancellationToken);
 
-            return Ok(query);
+            if (!appointments.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentResponse>
+                {
+                    Data = new List<AppointmentResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+
+            // Protect sensitive IDs
+            appointments.ForEach(x =>
+            {
+                x.Id = ProtectId(x.Id);
+                x.DoctorId = ProtectId(x.DoctorId);
+                x.DoctorSpecialization?.ForEach(s => s.Id = ProtectId(s.Id)); // Null check
+                if (x.AppointmentType != null)
+                    x.AppointmentType.Id = ProtectId(x.AppointmentType.Id);
+            });
+
+            // Return structured paginated response
+            return Ok(new PaginatedResponse<AppointmentResponse>
+            {
+                Data = appointments,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
+
 
         [HttpGet("pending")]
         [HasPermission(Permissions.Appointments.ViewPendingForDoctor)]
-        public async Task<ActionResult<List<AppointmentResponse>>> GetPendingAppointmentsForDoctor(CancellationToken cancellationToken = default)
+        public async Task<ActionResult<PaginatedResponse<AppointmentResponse>>> GetPendingAppointmentsForDoctor(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();
-            var query = await _appointmentsService.GetPendingAppointmentsForDoctor(doctorId, cancellationToken);
 
-            query.ForEach(x => x.Id = ProtectId(x.Id));
-            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
-            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
-            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
+            // Fetch paginated pending appointments
+            var (appointments, totalPages) = await _appointmentsService.GetPendingAppointmentsForDoctor(
+                doctorId, pageNumber, pageSize, cancellationToken);
 
-            return Ok(query);
+            if (!appointments.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentResponse>
+                {
+                    Data = new List<AppointmentResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+
+            // Protect sensitive IDs
+            appointments.ForEach(x =>
+            {
+                x.Id = ProtectId(x.Id);
+                x.DoctorId = ProtectId(x.DoctorId);
+                x.DoctorSpecialization?.ForEach(s => s.Id = ProtectId(s.Id)); // Null check
+                if (x.AppointmentType != null)
+                    x.AppointmentType.Id = ProtectId(x.AppointmentType.Id);
+            });
+
+            return Ok(new PaginatedResponse<AppointmentResponse>
+            {
+                Data = appointments,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
 
         [HttpGet("doctor/range")]
         [HasPermission(Permissions.Appointments.ViewInRangeForDoctor)]
-        public async Task<ActionResult<List<AppointmentResponse>>> GetAppointmentsByDateRangeForDoctor([FromQuery]DateTimeOffset startDate, [FromQuery] DateTimeOffset endDate, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<PaginatedResponse<AppointmentResponse>>> GetAppointmentsByDateRangeForDoctor(
+        [FromQuery] DateTimeOffset startDate,
+        [FromQuery] DateTimeOffset endDate,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
         {
             int doctorId = User.GetUserId();
-            var query = await _appointmentsService.GetAppointmentsByDateRangeForDoctor(doctorId,startDate,endDate, cancellationToken);
 
-            query.ForEach(x => x.Id = ProtectId(x.Id));
-            query.ForEach(x => x.DoctorId = ProtectId(x.DoctorId));
-            query.ForEach(x => x.DoctorSpecialization.ForEach(s => s.Id = ProtectId(s.Id)));
-            query.ForEach(x => x.AppointmentType.Id = ProtectId(x.AppointmentType.Id));
+            // Fetch paginated appointments in date range
+            var (appointments, totalPages) = await _appointmentsService.GetAppointmentsByDateRangeForDoctor(
+                doctorId, startDate, endDate, pageNumber, pageSize, cancellationToken);
 
-            return Ok(query);
+            if (!appointments.Any())
+            {
+                return Ok(new PaginatedResponse<AppointmentResponse>
+                {
+                    Data = new List<AppointmentResponse>(),
+                    TotalPages = totalPages,
+                    CurrentPage = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+
+            // Protect sensitive IDs
+            appointments.ForEach(x =>
+            {
+                x.Id = ProtectId(x.Id);
+                x.DoctorId = ProtectId(x.DoctorId);
+                x.DoctorSpecialization?.ForEach(s => s.Id = ProtectId(s.Id)); // Null check
+                if (x.AppointmentType != null)
+                    x.AppointmentType.Id = ProtectId(x.AppointmentType.Id);
+            });
+
+            return Ok(new PaginatedResponse<AppointmentResponse>
+            {
+                Data = appointments,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber,
+                PageSize = pageSize
+            });
         }
+
 
         // 🔥 Reusable Helper Method for ID Protection
         private int? UnprotectId(string protectedId) => _idProtectorService.UnProtect(protectedId);
