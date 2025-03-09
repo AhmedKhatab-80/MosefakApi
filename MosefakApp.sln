@@ -1,0 +1,61 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MosefakApp.Domains", "MosefakApp.Domains\MosefakApp.Domains.csproj", "{0F46A701-212E-4D6C-8091-84326AB2F64E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MosefakApp.Shared", "MosefakApp.Shared\MosefakApp.Shared.csproj", "{81EAEBC4-2DF3-4FF2-A1F9-99A4AC6EFD7E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MosefakApp.Core", "MosefakApp.Core\MosefakApp.Core.csproj", "{4AE46E2F-58ED-4125-A2D7-4ED4E40B7CB2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MosefakApp.Infrastructure", "MosefakApp.Infrastructure\MosefakApp.Infrastructure.csproj", "{856BDC66-E971-4D05-A8DD-80EF817AF5E5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MosefakApp.API", "MosefakApp.API\MosefakApp.API.csproj", "{19EB2875-6F72-4A72-A369-F786FA3D1144}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MosefakApi.DependencyInjection", "MosefakApi.DependencyInjection\MosefakApi.DependencyInjection.csproj", "{CBC6715D-7B30-406B-9195-22FBED250E9A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MosefakApi.Business", "MosefakApi.Business\MosefakApi.Business.csproj", "{AAF72552-0ED6-4917-AE07-210A383B7D82}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0F46A701-212E-4D6C-8091-84326AB2F64E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F46A701-212E-4D6C-8091-84326AB2F64E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F46A701-212E-4D6C-8091-84326AB2F64E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F46A701-212E-4D6C-8091-84326AB2F64E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{81EAEBC4-2DF3-4FF2-A1F9-99A4AC6EFD7E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81EAEBC4-2DF3-4FF2-A1F9-99A4AC6EFD7E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{81EAEBC4-2DF3-4FF2-A1F9-99A4AC6EFD7E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81EAEBC4-2DF3-4FF2-A1F9-99A4AC6EFD7E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AE46E2F-58ED-4125-A2D7-4ED4E40B7CB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AE46E2F-58ED-4125-A2D7-4ED4E40B7CB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AE46E2F-58ED-4125-A2D7-4ED4E40B7CB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AE46E2F-58ED-4125-A2D7-4ED4E40B7CB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{856BDC66-E971-4D05-A8DD-80EF817AF5E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{856BDC66-E971-4D05-A8DD-80EF817AF5E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{856BDC66-E971-4D05-A8DD-80EF817AF5E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{856BDC66-E971-4D05-A8DD-80EF817AF5E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19EB2875-6F72-4A72-A369-F786FA3D1144}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19EB2875-6F72-4A72-A369-F786FA3D1144}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19EB2875-6F72-4A72-A369-F786FA3D1144}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19EB2875-6F72-4A72-A369-F786FA3D1144}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CBC6715D-7B30-406B-9195-22FBED250E9A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBC6715D-7B30-406B-9195-22FBED250E9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBC6715D-7B30-406B-9195-22FBED250E9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBC6715D-7B30-406B-9195-22FBED250E9A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AAF72552-0ED6-4917-AE07-210A383B7D82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAF72552-0ED6-4917-AE07-210A383B7D82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAF72552-0ED6-4917-AE07-210A383B7D82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAF72552-0ED6-4917-AE07-210A383B7D82}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E2DF8851-AE30-41E6-B87D-1D0EBD61E6A1}
+	EndGlobalSection
+EndGlobal
